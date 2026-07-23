@@ -2,9 +2,8 @@ name: Naver Booking Monitor
 
 on:
   schedule:
-    # Runs every 20 minutes. 
-    # Note: GitHub Actions schedule triggers can be delayed by 5-10 minutes depending on GitHub's load.
-    - cron: '*/20 * * * *'
+    # Runs twice a day: at 9:00 AM and 9:00 PM KST (00:00 and 12:00 UTC)
+    - cron: '0 0,12 * * *'
   workflow_dispatch: # Allows you to manually trigger the run from the GitHub Actions tab
 
 jobs:
