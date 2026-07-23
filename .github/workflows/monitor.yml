@@ -9,6 +9,9 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
 
     steps:
     - name: Checkout repository
@@ -25,6 +28,7 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run Naver Booking Checker
-      # GitHub Actions Ubuntu runner comes with Google Chrome pre-installed.
-      # Selenium Manager will automatically locate Chrome and download the matching ChromeDriver.
+      # Pass the GitHub action token to checker.py so it can disable itself
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python checker.py

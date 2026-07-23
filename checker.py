@@ -91,6 +91,36 @@ def send_email(subject, body):
         logging.error(f"Failed to send notification: {e}")
         return False
 
+def disable_github_workflow():
+    github_token = os.getenv("GITHUB_TOKEN")
+    github_repo = os.getenv("GITHUB_REPOSITORY")
+    github_api_url = os.getenv("GITHUB_API_URL", "https://api.github.com")
+    
+    if not github_token or not github_repo:
+        logging.info("Not running in GitHub Actions environment or GITHUB_TOKEN not provided. Skipping workflow disable.")
+        return
+        
+    try:
+        logging.info(f"Attempting to disable GitHub workflow 'monitor.yml' for {github_repo}...")
+        url = f"{github_api_url}/repos/{github_repo}/actions/workflows/monitor.yml/disable"
+        
+        req = urllib.request.Request(
+            url,
+            headers={
+                'Authorization': f'Bearer {github_token}',
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'User-Agent': 'Mozilla/5.0'
+            },
+            method='PUT'
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            status = response.status
+            logging.info(f"Successfully disabled GitHub workflow. API status code: {status}")
+    except Exception as e:
+        logging.error(f"Failed to disable GitHub workflow: {e}")
+
 def init_driver():
     options = Options()
     options.add_argument('--headless')
@@ -289,6 +319,7 @@ def check_naver_booking(driver, dry_run=False):
         </html>
         """
         send_email(email_subject, email_body)
+        disable_github_workflow()
         return True
     else:
         logging.info(f"{TARGET_DATE} is currently NOT available.")
