@@ -1,0 +1,14 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Local files
+.env
+booking_checker.log
+screenshots/
+screenshots_test/
+*.png
+cron.log
