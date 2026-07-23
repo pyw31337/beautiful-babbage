@@ -49,17 +49,10 @@ def send_email(subject, body):
         logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit...")
         url = f"https://formsubmit.co/ajax/{RECEIVER_EMAIL}"
         
-        # Strip HTML tags for clean email content if desired, or let FormSubmit handle HTML. 
-        # FormSubmit message field accepts markdown/text.
-        clean_body = body.replace("<html>", "").replace("</html>", "").replace("<body>", "").replace("</body>", "").strip()
-        # Simple HTML tag stripping for clean notification format
-        import re
-        clean_body = re.sub('<[^<]+?>', '', clean_body)
-        
         payload = {
             "_subject": subject,
             "name": "Naver Booking Monitor",
-            "message": clean_body
+            "message": body.strip()
         }
         
         data = json.dumps(payload).encode('utf-8')
@@ -307,17 +300,16 @@ def check_naver_booking(driver, dry_run=False):
         logging.info(f"SUCCESS: {TARGET_DATE} is AVAILABLE for booking!")
         email_subject = f"[알림] 애슐리퀸즈 한강공원점 {TARGET_DATE} 예약 가능!"
         email_body = f"""
-        <html>
-        <body>
-            <h2>애슐리퀸즈 한강공원점 예약 알림</h2>
-            <p><strong>{TARGET_DATE}</strong> 예약이 가능해진 것으로 감지되었습니다!</p>
-            <p>지금 바로 아래 링크에서 예약을 진행하세요:</p>
-            <p><a href="{BOOKING_URL}" style="padding: 10px 20px; background-color: #03aa5a; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">네이버 예약 바로가기</a></p>
-            <br>
-            <p>※ 이 메일은 자동 발송되었습니다.</p>
-        </body>
-        </html>
-        """
+[애슐리퀸즈 여의도한강공원점 예약 알림]
+
+{TARGET_DATE} 예약이 가능해진 것으로 감지되었습니다!
+지금 바로 아래 링크에서 예약을 진행해 주세요.
+
+■ 예약 바로가기 링크:
+{BOOKING_URL}
+
+※ 이 메일은 자동 발송되었습니다.
+"""
         send_email(email_subject, email_body)
         disable_github_workflow()
         return True
@@ -327,15 +319,14 @@ def check_naver_booking(driver, dry_run=False):
             logging.info("[Dry Run] Sending a test email to verify SMTP configuration.")
             test_subject = "[테스트] 애슐리퀸즈 예약 모니터링 테스트 메일"
             test_body = f"""
-            <html>
-            <body>
-                <h2>예약 모니터링 시스템 테스트</h2>
-                <p>Naver 예약 모니터링 스크립트가 정상적으로 실행되었습니다.</p>
-                <p>현재 {TARGET_DATE} 예약은 <strong>불가능</strong> 상태입니다.</p>
-                <p>이 메일이 도착했다면 SMTP 이메일 전송 기능은 정상 작동하는 것입니다.</p>
-            </body>
-            </html>
-            """
+[예약 모니터링 시스템 테스트]
+
+Naver 예약 모니터링 스크립트가 정상적으로 실행되었습니다.
+현재 {TARGET_DATE} 예약은 '불가능' 상태입니다.
+
+이 메일이 도착했다면 예약 알림 기능은 정상 작동하는 것입니다.
+실제 예약이 열릴 시 새로운 링크와 함께 이메일이 발송됩니다.
+"""
             send_email(test_subject, test_body)
         return False
 
