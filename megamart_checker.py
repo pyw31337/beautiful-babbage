@@ -25,24 +25,44 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "pyw213@naver.com")
 SEARCH_URL = "https://www.megamart.com/search/?text=%ED%95%9C%EC%9A%B0+%EB%93%B1%EC%8B%AC"
 PRICE_THRESHOLD = 7000  # Alert if price is <= 7000 KRW
 
-def send_email(subject, body):
+def send_email(subject, body, attachment_path=None):
     try:
         logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit...")
         url = f"https://formsubmit.co/ajax/{RECEIVER_EMAIL}"
         
-        payload = {
-            "_subject": subject,
-            "name": "Megamart Price Monitor",
-            "message": body.strip()
-        }
+        boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+        parts = []
         
-        data = json.dumps(payload).encode('utf-8')
+        def add_field(name, value):
+            parts.append(f'--{boundary}'.encode('utf-8'))
+            parts.append(f'Content-Disposition: form-data; name="{name}"\r\n'.encode('utf-8'))
+            parts.append(value.encode('utf-8'))
+            
+        add_field("_subject", subject)
+        add_field("name", "Megamart Price Monitor")
+        add_field("message", body.strip())
+        
+        # Add file attachment if provided
+        if attachment_path and os.path.exists(attachment_path):
+            try:
+                with open(attachment_path, 'rb') as f:
+                    file_content = f.read()
+                filename = os.path.basename(attachment_path)
+                parts.append(f'--{boundary}'.encode('utf-8'))
+                parts.append(f'Content-Disposition: form-data; name="attachment"; filename="{filename}"'.encode('utf-8'))
+                parts.append(f'Content-Type: image/png\r\n'.encode('utf-8'))
+                parts.append(file_content)
+            except Exception as file_err:
+                logging.error(f"Error reading attachment file: {file_err}")
+                
+        parts.append(f'--{boundary}--'.encode('utf-8'))
+        body_data = b'\r\n'.join(parts)
         
         req = urllib.request.Request(
             url, 
-            data=data, 
+            data=body_data, 
             headers={
-                'Content-Type': 'application/json',
+                'Content-Type': f'multipart/form-data; boundary={boundary}',
                 'Origin': 'http://localhost',
                 'Referer': 'http://localhost/',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -50,7 +70,7 @@ def send_email(subject, body):
             method='POST'
         )
         
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             res_data = response.read().decode('utf-8')
             res_json = json.loads(res_data)
             
@@ -296,7 +316,7 @@ def check_megamart_prices(driver, dry_run=False):
 
 ※ 이 메일은 자동 발송되었습니다.
 """
-        send_email(email_subject, email_body)
+        send_email(email_subject, email_body, attachment_path="history/price_trend.png")
         return True
     else:
         logging.info(f"No products found below the {PRICE_THRESHOLD:,}원 threshold.")
@@ -321,7 +341,7 @@ def check_megamart_prices(driver, dry_run=False):
 
 ※ 이 메일은 자동 발송되었습니다.
 """
-            send_email(test_subject, test_body)
+            send_email(test_subject, test_body, attachment_path="history/price_trend.png")
         return False
 
 def main():
