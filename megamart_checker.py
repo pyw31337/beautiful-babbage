@@ -1,0 +1,210 @@
+import os
+import sys
+import time
+import logging
+import argparse
+import urllib.request
+import json
+import re
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+
+# Configure Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("booking_checker.log", encoding="utf-8") # Append to same log file
+    ]
+)
+
+# Configuration Variables
+RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "pyw213@naver.com")
+SEARCH_URL = "https://www.megamart.com/search/?text=%ED%95%9C%EC%9A%B0+%EB%93%B1%EC%8B%AC"
+PRICE_THRESHOLD = 7000  # Alert if price is <= 7000 KRW
+
+def send_email(subject, body):
+    try:
+        logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit...")
+        url = f"https://formsubmit.co/ajax/{RECEIVER_EMAIL}"
+        
+        payload = {
+            "_subject": subject,
+            "name": "Megamart Price Monitor",
+            "message": body.strip()
+        }
+        
+        data = json.dumps(payload).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url, 
+            data=data, 
+            headers={
+                'Content-Type': 'application/json',
+                'Origin': 'http://localhost',
+                'Referer': 'http://localhost/',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            method='POST'
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = response.read().decode('utf-8')
+            res_json = json.loads(res_data)
+            
+            if res_json.get("success") == "true" or "needs Activation" in res_json.get("message", ""):
+                logging.info(f"Notification sent successfully: {res_json.get('message')}")
+                return True
+            else:
+                logging.error(f"FormSubmit error: {res_json.get('message')}")
+                return False
+                
+    except Exception as e:
+        logging.error(f"Failed to send notification: {e}")
+        return False
+
+def init_driver():
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--window-size=1920,1080')
+    options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    
+    # Exclude automation switch to avoid bot flags
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+    
+    driver = webdriver.Chrome(options=options)
+    
+    # Hide automation webdriver property
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "const newProto = navigator.__proto__; delete newProto.webdriver; navigator.__proto__ = newProto;"
+    })
+    return driver
+
+def check_megamart_prices(driver, dry_run=False):
+    logging.info(f"Navigating to Megamart Search: {SEARCH_URL}")
+    driver.get(SEARCH_URL)
+    
+    # Wait for search elements to render
+    time.sleep(5)
+    
+    # Take visual inspection screenshot
+    os.makedirs("screenshots", exist_ok=True)
+    driver.save_screenshot("screenshots/megamart_step1_loaded.png")
+    logging.info("Page loaded. Saved screenshot/megamart_step1_loaded.png")
+    
+    # Parse items
+    item_wrappers = driver.find_elements(By.CLASS_NAME, "item-wrapper")
+    logging.info(f"Found {len(item_wrappers)} total items on the search page.")
+    
+    monitored_products = []
+    cheap_products = []
+    
+    for item in item_wrappers:
+        try:
+            # Find title
+            title_els = item.find_elements(By.CLASS_NAME, "title")
+            if not title_els:
+                continue
+            title_text = title_els[0].text.strip()
+            
+            # Filter condition: must contain both "한우" and "등심", and specifically "100g"
+            if "한우" in title_text and "등심" in title_text and "100g" in title_text:
+                # Find price
+                # Prices are inside div.current-price strong.number
+                price_els = item.find_elements(By.CSS_SELECTOR, ".current-price .number")
+                if not price_els:
+                    continue
+                price_text = price_els[0].text.strip()
+                
+                # Convert to integer (e.g. "12,640" -> 12640)
+                price_value = int(re.sub(r"[^\d]", "", price_text))
+                
+                monitored_products.append((title_text, price_value))
+                logging.info(f"Monitored item: '{title_text}' -> {price_value:,}원")
+                
+                # Check threshold (<= 7000 KRW)
+                if price_value <= PRICE_THRESHOLD:
+                    cheap_products.append((title_text, price_value))
+                    
+        except Exception as item_err:
+            logging.error(f"Error parsing item card: {item_err}")
+            
+    # Save final check screenshot
+    driver.save_screenshot("screenshots/megamart_step2_check.png")
+    
+    # Log results
+    logging.info(f"Total matching 100g Hanwoo Ribeye products: {len(monitored_products)}")
+    
+    if cheap_products:
+        logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원!")
+        
+        # Build alert email body
+        product_list_str = "\n".join([f"- {name}: {price:,}원" for name, price in cheap_products])
+        email_subject = f"[알림] 메가마트 한우 등심 100g 가격 인하! ({PRICE_THRESHOLD:,}원 이하)"
+        email_body = f"""
+[메가마트 한우 등심 가격 인하 알림]
+
+설정한 조건(100g 당 {PRICE_THRESHOLD:,}원 이하)을 만족하는 한우 등심 상품이 감지되었습니다!
+지금 바로 할인 혜택을 확인하고 구매해 보세요.
+
+■ 가격 인하 상품 목록:
+{product_list_str}
+
+■ 쇼핑몰 바로가기 링크:
+{SEARCH_URL}
+
+※ 이 메일은 자동 발송되었습니다.
+"""
+        send_email(email_subject, email_body)
+        return True
+    else:
+        logging.info(f"No products found below the {PRICE_THRESHOLD:,}원 threshold.")
+        if dry_run:
+            logging.info("[Dry Run] Sending test email with current prices.")
+            product_list_str = "\n".join([f"- {name}: {price:,}원" for name, price in monitored_products])
+            
+            test_subject = "[테스트] 메가마트 한우 등심 가격 모니터링 테스트"
+            test_body = f"""
+[메가마트 한우 등심 모니터링 테스트 메일]
+
+메가마트 가격 감시 스크립트가 정상적으로 동작하고 있습니다.
+
+■ 현재 검색된 한우 등심 100g 상품 목록:
+{product_list_str}
+
+현재 가격은 설정한 기준({PRICE_THRESHOLD:,}원 이하)보다 높은 상태이므로, 실제 구매 알림 메일은 발송되지 않았습니다.
+실제 가격이 {PRICE_THRESHOLD:,}원 이하로 떨어지면 구매 알림 이메일이 발송됩니다.
+
+■ 쇼핑몰 바로가기 링크:
+{SEARCH_URL}
+
+※ 이 메일은 자동 발송되었습니다.
+"""
+            send_email(test_subject, test_body)
+        return False
+
+def main():
+    parser = argparse.ArgumentParser(description="Megamart Hanwoo Ribeye Price Monitor")
+    parser.add_argument("--dry-run", action="store_true", help="Run once, save screenshots, and send a test email")
+    args = parser.parse_args()
+
+    driver = None
+    try:
+        driver = init_driver()
+        check_megamart_prices(driver, dry_run=args.dry_run)
+    except Exception as e:
+        logging.error(f"Fatal error in Megamart price checker execution: {e}", exc_info=True)
+    finally:
+        if driver:
+            driver.quit()
+            logging.info("Browser driver closed.")
+
+if __name__ == "__main__":
+    main()
