@@ -1,2 +1,4 @@
 selenium>=4.10.0
 python-dotenv>=1.0.0
+beautifulsoup4
+matplotlib>=1.0.0

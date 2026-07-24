@@ -87,6 +87,136 @@ def init_driver():
     })
     return driver
 
+def save_price_history_and_plot(products):
+    import csv
+    from datetime import datetime
+    
+    os.makedirs("history", exist_ok=True)
+    csv_path = "history/prices.csv"
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # Append today's data
+    file_exists = os.path.exists(csv_path)
+    existing_entries = set()
+    if file_exists:
+        try:
+            with open(csv_path, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                header = next(reader, None)
+                for row in reader:
+                    if len(row) >= 3:
+                        existing_entries.add((row[0], row[1]))
+        except Exception as e:
+            logging.error(f"Error reading existing CSV: {e}")
+
+    try:
+        with open(csv_path, "a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["date", "product_name", "price"])
+            for name, price in products:
+                if (today_str, name) not in existing_entries:
+                    writer.writerow([today_str, name, price])
+                    logging.info(f"Saved history: {today_str}, {name}, {price}원")
+    except Exception as e:
+        logging.error(f"Failed to write to CSV: {e}")
+        return
+
+    # Generate trend chart
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        
+        history_data = {}
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            for row in reader:
+                if len(row) >= 3:
+                    date_val = datetime.strptime(row[0], "%Y-%m-%d")
+                    name = row[1]
+                    price = int(row[2])
+                    if name not in history_data:
+                        history_data[name] = {"dates": [], "prices": []}
+                    history_data[name]["dates"].append(date_val)
+                    history_data[name]["prices"].append(price)
+
+        plt.figure(figsize=(10, 6))
+        plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
+
+        import platform
+        system = platform.system()
+        if system == 'Darwin':
+            plt.rcParams['font.family'] = 'AppleGothic'
+        elif system == 'Windows':
+            plt.rcParams['font.family'] = 'Malgun Gothic'
+        else:
+            plt.rcParams['font.family'] = 'NanumGothic'
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        for name, data in history_data.items():
+            sorted_pairs = sorted(zip(data["dates"], data["prices"]))
+            sorted_dates, sorted_prices = zip(*sorted_pairs)
+            
+            short_name = name.replace(" (국내산) 100g", "").replace("등급 구이용", "")
+            plt.plot(sorted_dates, sorted_prices, marker='o', linewidth=2, label=short_name)
+            
+        plt.title("Megamart Hanwoo Ribeye Price Trend (per 100g)", fontsize=14, fontweight='bold', pad=15)
+        plt.xlabel("Date", fontsize=12)
+        plt.ylabel("Price (KRW)", fontsize=12)
+        
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+        plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(history_data)//10)))
+        plt.gcf().autofmt_xdate()
+        
+        plt.axhline(y=PRICE_THRESHOLD, color='r', linestyle='--', alpha=0.7, label=f"Threshold ({PRICE_THRESHOLD:,}원)")
+        plt.legend(loc="upper right", frameon=True, shadow=True)
+        plt.tight_layout()
+        
+        chart_path = "history/price_trend.png"
+        plt.savefig(chart_path, dpi=150)
+        plt.close()
+        logging.info(f"Price trend chart updated and saved to {chart_path}")
+        
+        update_readme(products, today_str)
+        
+    except Exception as plot_err:
+        logging.error(f"Failed to generate price trend chart: {plot_err}")
+
+def update_readme(products, today_str):
+    try:
+        readme_path = "README.md"
+        latest_prices_str = "\n".join([f"- **{name}**: {price:,}원 (업데이트: {today_str})" for name, price in products])
+        
+        content = f"""# Naver Booking & Megamart Price Monitor
+
+이 저장소는 네이버 예약 및 메가마트 가격 감시 모니터링 시스템을 위한 자동화 저장소입니다.
+
+---
+
+## 🥩 메가마트 한우 등심 100g 가격 실시간 추이
+* **설정 가격 기준**: 100g 당 **{PRICE_THRESHOLD:,}원 이하**일 때 이메일 알림 발송
+
+### 📌 최근 수집된 가격
+{latest_prices_str}
+
+### 📈 가격 추이 그래프
+![한우 등심 가격 추이](history/price_trend.png)
+
+---
+
+## 📅 네이버 예약 모니터링 (애슐리퀸즈 여의도한강공원점)
+* **대상 일자**: 2026년 8월 15일 광복절
+* **동작 방식**: 예약이 열리는 즉시 이메일 발송 후 감시가 자동으로 종료됩니다.
+"""
+        with open(readme_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        logging.info("README.md updated with latest prices and chart.")
+    except Exception as e:
+        logging.error(f"Failed to update README.md: {e}")
+
 def check_megamart_prices(driver, dry_run=False):
     logging.info(f"Navigating to Megamart Search: {SEARCH_URL}")
     driver.get(SEARCH_URL)
@@ -142,6 +272,10 @@ def check_megamart_prices(driver, dry_run=False):
     # Log results
     logging.info(f"Total matching 100g Hanwoo Ribeye products: {len(monitored_products)}")
     
+    # Save history and generate trend chart
+    if monitored_products:
+        save_price_history_and_plot(monitored_products)
+        
     if cheap_products:
         logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원!")
         
