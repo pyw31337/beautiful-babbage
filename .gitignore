@@ -11,4 +11,5 @@ booking_checker.log
 screenshots/
 screenshots_test/
 *.png
+!history/*.png
 cron.log
