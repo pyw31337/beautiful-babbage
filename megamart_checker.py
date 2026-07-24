@@ -134,10 +134,10 @@ def save_price_history_and_plot(products):
             writer = csv.writer(f)
             if not file_exists:
                 writer.writerow(["date", "product_name", "price"])
-            for name, price in products:
+            for name, price_per_100g, actual_price, weight in products:
                 if (today_str, name) not in existing_entries:
-                    writer.writerow([today_str, name, price])
-                    logging.info(f"Saved history: {today_str}, {name}, {price}원")
+                    writer.writerow([today_str, name, price_per_100g])
+                    logging.info(f"Saved history: {today_str}, {name}, 100g당 {price_per_100g}원")
     except Exception as e:
         logging.error(f"Failed to write to CSV: {e}")
         return
@@ -208,7 +208,10 @@ def save_price_history_and_plot(products):
 def update_readme(products, today_str):
     try:
         readme_path = "README.md"
-        latest_prices_str = "\n".join([f"- **{name}**: {price:,}원 (업데이트: {today_str})" for name, price in products])
+        latest_prices_str = "\n".join([
+            f"- **{name}**: 100g당 {price_per_100g:,}원 (현재 판매가: {actual_price:,}원/{weight}g) (업데이트: {today_str})" 
+            for name, price_per_100g, actual_price, weight in products
+        ])
         
         content = f"""# Naver Booking & Megamart Price Monitor
 
@@ -264,10 +267,9 @@ def check_megamart_prices(driver, dry_run=False):
                 continue
             title_text = title_els[0].text.strip()
             
-            # Filter condition: must contain both "한우" and "등심", and specifically "100g"
-            if "한우" in title_text and "등심" in title_text and "100g" in title_text:
+            # Filter condition: must contain both "한우" and "등심", and "구이용"
+            if "한우" in title_text and "등심" in title_text and "구이용" in title_text:
                 # Find price
-                # Prices are inside div.current-price strong.number
                 price_els = item.find_elements(By.CSS_SELECTOR, ".current-price .number")
                 if not price_els:
                     continue
@@ -276,12 +278,28 @@ def check_megamart_prices(driver, dry_run=False):
                 # Convert to integer (e.g. "12,640" -> 12640)
                 price_value = int(re.sub(r"[^\d]", "", price_text))
                 
-                monitored_products.append((title_text, price_value))
-                logging.info(f"Monitored item: '{title_text}' -> {price_value:,}원")
+                # Parse weight from title to calculate price per 100g
+                # Examples: "100g", "1kg", "1 kg", "600g"
+                weight = 100 # default fallback
+                weight_match = re.search(r"(\d+)\s*(g|kg)", title_text.lower())
+                if weight_match:
+                    val = int(weight_match.group(1))
+                    unit = weight_match.group(2)
+                    if unit == "kg":
+                        weight = val * 1000
+                    else:
+                        weight = val
                 
-                # Check threshold (<= 7000 KRW)
-                if price_value <= PRICE_THRESHOLD:
-                    cheap_products.append((title_text, price_value))
+                # Calculate price per 100g
+                price_per_100g = int((price_value / weight) * 100)
+                
+                # Store (title, price_per_100g, actual_price, weight)
+                monitored_products.append((title_text, price_per_100g, price_value, weight))
+                logging.info(f"Monitored item: '{title_text}' -> {price_value:,}원 ({weight}g) | 100g당 {price_per_100g:,}원")
+                
+                # Check threshold (<= 7000 KRW/100g)
+                if price_per_100g <= PRICE_THRESHOLD:
+                    cheap_products.append((title_text, price_per_100g, price_value, weight))
                     
         except Exception as item_err:
             logging.error(f"Error parsing item card: {item_err}")
@@ -290,18 +308,21 @@ def check_megamart_prices(driver, dry_run=False):
     driver.save_screenshot("screenshots/megamart_step2_check.png")
     
     # Log results
-    logging.info(f"Total matching 100g Hanwoo Ribeye products: {len(monitored_products)}")
+    logging.info(f"Total matching Hanwoo Ribeye 구이용 products: {len(monitored_products)}")
     
     # Save history and generate trend chart
     if monitored_products:
         save_price_history_and_plot(monitored_products)
         
     if cheap_products:
-        logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원!")
+        logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원/100g threshold!")
         
         # Build alert email body
-        product_list_str = "\n".join([f"- {name}: {price:,}원" for name, price in cheap_products])
-        email_subject = f"[알림] 메가마트 한우 등심 100g 가격 인하! ({PRICE_THRESHOLD:,}원 이하)"
+        product_list_str = "\n".join([
+            f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)" 
+            for name, price_per_100g, price, weight in cheap_products
+        ])
+        email_subject = f"[알림] 메가마트 한우 등심 가격 인하! (100g당 {PRICE_THRESHOLD:,}원 이하)"
         email_body = f"""
 [메가마트 한우 등심 가격 인하 알림]
 
@@ -319,10 +340,13 @@ def check_megamart_prices(driver, dry_run=False):
         send_email(email_subject, email_body, attachment_path="history/price_trend.png")
         return True
     else:
-        logging.info(f"No products found below the {PRICE_THRESHOLD:,}원 threshold.")
+        logging.info(f"No products found below the {PRICE_THRESHOLD:,}원/100g threshold.")
         if dry_run:
             logging.info("[Dry Run] Sending test email with current prices.")
-            product_list_str = "\n".join([f"- {name}: {price:,}원" for name, price in monitored_products])
+            product_list_str = "\n".join([
+                f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)" 
+                for name, price_per_100g, price, weight in monitored_products
+            ])
             
             test_subject = "[테스트] 메가마트 한우 등심 가격 모니터링 테스트"
             test_body = f"""
