@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메가마트 한우 등심 가격 추이 대시보드</title>
+    <!-- Premium Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --card-bg: #1f2833;
+            --text-primary: #ffffff;
+            --text-secondary: #c5a059;
+            --accent-color: #66fcf1;
+            --accent-hover: #45f3e5;
+            --border-color: #45a29e;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Outfit', 'Noto Sans KR', sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            margin: 20px 0;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 10px 0;
+            background: linear-gradient(45deg, #ffffff, var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(69, 162, 158, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(4px);
+            margin-bottom: 24px;
+        }
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .filter-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-right: 5px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+        button {
+            background-color: #0b0c10;
+            color: #ffffff;
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+        button.active {
+            background-color: var(--accent-color);
+            color: #0b0c10;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(102, 252, 241, 0.4);
+        }
+        .checkbox-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(69, 162, 158, 0.15);
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(11, 12, 16, 0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(69, 162, 158, 0.15);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s ease;
+        }
+        .checkbox-item:hover {
+            border-color: var(--accent-color);
+        }
+        .checkbox-item.active {
+            border-color: var(--accent-color);
+            background: rgba(102, 252, 241, 0.1);
+        }
+        .checkbox-item input {
+            display: none;
+        }
+        .checkbox-item .indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #555;
+            transition: all 0.3s ease;
+        }
+        .checkbox-item.active .indicator {
+            background-color: var(--accent-color);
+            box-shadow: 0 0 8px var(--accent-color);
+        }
+        .chart-container {
+            position: relative;
+            height: 450px;
+            width: 100%;
+        }
+        .info-footer {
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🥩 한우 등심 가격 추이 대시보드</h1>
+            <div class="subtitle">메가마트 한우 등심 100g 단가 실시간 모니터링</div>
+        </header>
+
+        <div class="card">
+            <div class="controls-row">
+                <div class="filter-group">
+                    <span class="filter-label">기간 필터:</span>
+                    <div class="btn-group">
+                        <button onclick="setPeriod(7)" id="btn-7">최근 7일</button>
+                        <button onclick="setPeriod(30)" id="btn-30">최근 30일</button>
+                        <button onclick="setPeriod(0)" id="btn-0" class="active">전체</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-label">모니터링 상품 선택:</div>
+            <div class="checkbox-container" id="product-filters">
+                <!-- Checkboxes will be dynamically rendered here -->
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </div>
+
+        <div class="info-footer">
+            본 대시보드는 12시간마다 자동으로 업데이트됩니다.
+        </div>
+    </div>
+
+    <script>
+        // Data injected by python script
+        const PRICE_DATA = [{"date": "2026-07-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-24", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-24", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}];
+
+        // Group data by product
+        const products = [...new Set(PRICE_DATA.map(item => item.product_name))];
+        let activeProducts = [...products];
+        let activePeriod = 0; // 0 means all-time
+        let chart = null;
+
+        // Color palettes for line charts
+        const colors = [
+            '#66fcf1', // Cyan
+            '#ff007f', // Pink
+            '#ffb300', // Yellow
+            '#00e676', // Green
+            '#d500f9'  // Purple
+        ];
+
+        // Format dates correctly
+        const formatShortDate = (dateStr) => {
+            const d = new Date(dateStr);
+            return `${d.getMonth() + 1}-${d.getDate()}`;
+        };
+
+        // Render product toggles
+        const filterContainer = document.getElementById("product-filters");
+        products.forEach((prod, index) => {
+            const label = document.createElement("label");
+            label.className = "checkbox-item active";
+            label.id = `label-${index}`;
+            label.innerHTML = `
+                <input type="checkbox" checked onchange="toggleProduct('${prod}', ${index})">
+                <span class="indicator"></span>
+                <span>${prod.replace(" (국내산) 100g", "").replace("등급 구이용", "")}</span>
+            `;
+            filterContainer.appendChild(label);
+        });
+
+        const toggleProduct = (prod, index) => {
+            const label = document.getElementById(`label-${index}`);
+            if (activeProducts.includes(prod)) {
+                activeProducts = activeProducts.filter(p => p !== prod);
+                label.classList.remove("active");
+            } else {
+                activeProducts.push(prod);
+                label.classList.add("active");
+            }
+            updateChart();
+        };
+
+        const setPeriod = (days) => {
+            activePeriod = days;
+            document.getElementById("btn-7").classList.remove("active");
+            document.getElementById("btn-30").classList.remove("active");
+            document.getElementById("btn-0").classList.remove("active");
+            document.getElementById(`btn-${days}`).classList.add("active");
+            updateChart();
+        };
+
+        const updateChart = () => {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            // Get all unique dates
+            let dates = [...new Set(PRICE_DATA.map(item => item.date))].sort();
+            
+            // Filter by period
+            if (activePeriod > 0) {
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - activePeriod);
+                const limitStr = limitDate.toISOString().split('T')[0];
+                dates = dates.filter(d => d >= limitStr);
+            }
+
+            // Create datasets
+            const datasets = activeProducts.map((prod, index) => {
+                const prodData = PRICE_DATA.filter(item => item.product_name === prod);
+                const dataPoints = dates.map(date => {
+                    const found = prodData.find(item => item.date === date);
+                    return found ? found.price : null;
+                });
+
+                return {
+                    label: prod.replace(" (국내산) 100g", "").replace("등급 구이용", ""),
+                    data: dataPoints,
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.15,
+                    spanGaps: true
+                };
+            });
+
+            // Add threshold line
+            datasets.push({
+                label: '알림 기준가 (7,000원)',
+                data: Array(dates.length).fill(7000),
+                borderColor: '#ff4444',
+                borderDash: [5, 5],
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            });
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates.map(d => formatShortDate(d)),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#888' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#888' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#fff', font: { family: 'Noto Sans KR' } }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y).replace('₩', '') + '원';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Initial render
+        updateChart();
+    </script>
+</body>
+</html>
