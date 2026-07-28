@@ -183,11 +183,21 @@ def check_naver_booking(driver, dry_run=False):
                 continue
 
     if not clicked:
-        logging.error("Failed to find or click '실시간예약' card!")
         driver.save_screenshot("screenshots/error_no_card.png")
-        return False
+        raise RuntimeError("Failed to find or click '실시간예약' card!")
 
     time.sleep(5)
+
+    # Check if we are on the intermediate details page and need to click "예약하기"
+    try:
+        booking_buttons = driver.find_elements(By.XPATH, "//*[text()='예약하기' or contains(text(), '예약하기')]")
+        if booking_buttons:
+            logging.info("Intermediate details page detected. Clicking '예약하기' button...")
+            driver.execute_script("arguments[0].click();", booking_buttons[0])
+            time.sleep(5)
+    except Exception as detail_err:
+        logging.warning(f"Error handling intermediate details page: {detail_err}")
+
     driver.save_screenshot("screenshots/step2_calendar_loaded.png")
     logging.info("Calendar page loaded. Saved screenshot/step2_calendar_loaded.png")
 
@@ -208,35 +218,46 @@ def check_naver_booking(driver, dry_run=False):
         # Find month title header
         month_header_text = ""
         try:
-            # Look for element containing "2026." or the target year
-            month_header_el = driver.find_element(By.XPATH, f"//*[contains(text(), '{target_year}.')]")
+            month_header_el = driver.find_element(By.XPATH, "//span[contains(@class, 'monthLabel')]")
             month_header_text = month_header_el.text.strip()
         except Exception as e:
             logging.warning(f"Error finding month header element: {e}")
 
         logging.info(f"Current calendar month header detected: '{month_header_text}'")
 
-        if target_month_str in month_header_text:
+        # Clean spaces for comparison (e.g. "2026. 8" -> "2026.8")
+        header_clean = month_header_text.replace(" ", "").replace("\n", "").replace("\r", "")
+        if target_month_str in header_clean:
             month_reached = True
             logging.info(f"Reached target month: {target_month_str}!")
             break
 
         # Click next month button
         next_button = None
-        next_selectors = [
-            "button.btn_next",
-            "[class*='next']",
-            "[class*='btn_next']",
-            "button[aria-label*='다음']"
-        ]
-        for sel in next_selectors:
-            try:
-                btn = driver.find_element(By.CSS_SELECTOR, sel)
-                if btn.is_displayed():
-                    next_button = btn
-                    break
-            except:
-                continue
+        
+        # Try our precise XPath sibling selector first
+        try:
+            next_btn_xpath = driver.find_element(By.XPATH, "//span[contains(@class, 'monthLabel')]/following-sibling::button")
+            if next_btn_xpath.is_displayed():
+                next_button = next_btn_xpath
+        except:
+            pass
+
+        if not next_button:
+            next_selectors = [
+                "button.btn_next",
+                "[class*='next']",
+                "[class*='btn_next']",
+                "button[aria-label*='다음']"
+            ]
+            for sel in next_selectors:
+                try:
+                    btn = driver.find_element(By.CSS_SELECTOR, sel)
+                    if btn.is_displayed():
+                        next_button = btn
+                        break
+                except:
+                    continue
 
         if next_button:
             logging.info("Clicking next month button...")
@@ -251,8 +272,7 @@ def check_naver_booking(driver, dry_run=False):
             break
 
     if not month_reached:
-        logging.error(f"Failed to reach target month: {target_month_str}")
-        return False
+        raise RuntimeError(f"Failed to reach target month: {target_month_str}")
 
     # Now check target day (e.g. "15")
     day_str = str(int(TARGET_DATE.split("-")[2]))  # "15"
@@ -260,29 +280,42 @@ def check_naver_booking(driver, dry_run=False):
 
     available = False
     try:
-        # Find span with class 'num' and exact text matching target day
-        spans = driver.find_elements(By.XPATH, f"//span[@class='num' and text()='{day_str}']")
+        # Find span with class containing 'day' and exact text matching target day
+        spans = driver.find_elements(By.XPATH, f"//span[contains(@class, 'day') and text()='{day_str}']")
         if not spans:
-            logging.error(f"No span element with text '{day_str}' found in the calendar.")
-            return False
+            # Fallback to any span with exact text
+            spans = driver.find_elements(By.XPATH, f"//span[text()='{day_str}']")
+            
+        if not spans:
+            raise RuntimeError(f"No span element with text '{day_str}' found in the calendar.")
 
-        # Get parent of the first matching span (the button/container)
+        # Get parent cell element of the first matching span
         span_el = spans[0]
-        parent_el = span_el.find_element(By.XPATH, "..")
+        cell_el = None
+        try:
+            cell_el = span_el.find_element(By.XPATH, "./ancestor::div[contains(@class, '_cell_')][1]")
+        except:
+            try:
+                cell_el = span_el.find_element(By.XPATH, "./ancestor::div[contains(@class, 'cell')][1]")
+            except:
+                pass
+                
+        if cell_el is None:
+            cell_el = span_el.find_element(By.XPATH, "../..")
         
-        parent_class = parent_el.get_attribute("class") or ""
-        parent_disabled = parent_el.get_attribute("disabled")
-        parent_aria = parent_el.get_attribute("aria-disabled") or ""
+        cell_class = cell_el.get_attribute("class") or ""
+        cell_disabled = cell_el.get_attribute("disabled")
+        cell_aria = cell_el.get_attribute("aria-disabled") or ""
 
-        logging.info(f"Day Element: tag={parent_el.tag_name}, class='{parent_class}', disabled={parent_disabled}, aria-disabled='{parent_aria}'")
+        logging.info(f"Day Element: tag={cell_el.tag_name}, class='{cell_class}', disabled={cell_disabled}, aria-disabled='{cell_aria}'")
 
         # Determine if disabled
         is_disabled = False
-        if "unselectable" in parent_class.lower() or "disabled" in parent_class.lower():
+        if "closed" in cell_class.lower() or "disabled" in cell_class.lower() or "unselectable" in cell_class.lower():
             is_disabled = True
-        if parent_disabled is not None and parent_disabled != "false":
+        if cell_disabled is not None and cell_disabled != "false":
             is_disabled = True
-        if parent_aria.lower() == "true":
+        if cell_aria.lower() == "true":
             is_disabled = True
 
         if not is_disabled:
@@ -365,6 +398,8 @@ def main():
             
     except Exception as e:
         logging.error(f"Fatal error in main execution: {e}", exc_info=True)
+        import sys
+        sys.exit(1)
     finally:
         if driver:
             driver.quit()
