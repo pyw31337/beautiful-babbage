@@ -25,47 +25,36 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "pyw213@naver.com")
 SEARCH_URL = "https://www.megamart.com/search/?text=%ED%95%9C%EC%9A%B0+%EB%93%B1%EC%8B%AC"
 PRICE_THRESHOLD = 7000  # Alert if price is <= 7000 KRW
 
-def send_email(subject, body, attachment_path=None):
+def upload_to_tmpfiles(file_path):
     try:
-        logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit standard endpoint...")
-        url = f"https://formsubmit.co/{RECEIVER_EMAIL}"
-        
+        logging.info(f"Uploading {file_path} to Tmpfiles.org with 48 hours expiration...")
+        url = "https://tmpfiles.org/api/v1/upload"
         boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
         body_parts = []
         
-        def add_field(name, value):
-            body_parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode('utf-8'))
-            
-        add_field("_subject", subject)
-        add_field("name", "Megamart Price Monitor")
-        add_field("message", body.strip())
-        add_field("_captcha", "false")
+        # expire field (48 hours = 172800 seconds)
+        body_parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="expire"\r\n\r\n172800\r\n'.encode('utf-8'))
         
-        # Add file attachment if provided
-        if attachment_path and os.path.exists(attachment_path):
-            filename = os.path.basename(attachment_path)
-            try:
-                with open(attachment_path, 'rb') as f:
-                    file_content = f.read()
-                
-                file_header = (
-                    f'--{boundary}\r\n'
-                    f'Content-Disposition: form-data; name="attachment"; filename="{filename}"\r\n'
-                    f'Content-Type: image/png\r\n\r\n'
-                ).encode('utf-8')
-                
-                body_parts.append(file_header)
-                body_parts.append(file_content)
-                body_parts.append(b'\r\n')
-            except Exception as file_err:
-                logging.error(f"Error reading attachment file: {file_err}")
-                
+        # file field
+        filename = os.path.basename(file_path)
+        with open(file_path, 'rb') as f:
+            file_content = f.read()
+            
+        file_header = (
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f'Content-Type: image/png\r\n\r\n'
+        ).encode('utf-8')
+        body_parts.append(file_header)
+        body_parts.append(file_content)
+        body_parts.append(b'\r\n')
         body_parts.append(f'--{boundary}--\r\n'.encode('utf-8'))
+        
         body_data = b''.join(body_parts)
         
         req = urllib.request.Request(
-            url, 
-            data=body_data, 
+            url,
+            data=body_data,
             headers={
                 'Content-Type': f'multipart/form-data; boundary={boundary}',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -73,13 +62,64 @@ def send_email(subject, body, attachment_path=None):
             method='POST'
         )
         
+        with urllib.request.urlopen(req, timeout=20) as response:
+            res_data = response.read().decode('utf-8')
+            result = json.loads(res_data)
+            if result.get('status') == 'success':
+                download_url = result['data']['url']
+                # Convert standard download page to raw file URL
+                direct_url = download_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+                logging.info(f"Successfully uploaded to Tmpfiles: {direct_url}")
+                return direct_url
+            else:
+                logging.error(f"Tmpfiles upload failed: {res_data}")
+                return None
+    except Exception as e:
+        logging.error(f"Failed to upload to Tmpfiles: {e}")
+        return None
+
+def send_email(subject, body, attachment_path=None):
+    try:
+        # If attachment is provided, upload it to Tmpfiles and add the link to the body
+        if attachment_path and os.path.exists(attachment_path):
+            img_url = upload_to_tmpfiles(attachment_path)
+            if img_url:
+                body = body.strip() + f"\n\n■ 가격 변동 추이 그래프 (아래 링크 클릭):\n{img_url}"
+            else:
+                body = body.strip() + "\n\n(참고: 가격 변동 추이 그래프 업로드에 실패했습니다.)"
+        
+        logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit AJAX endpoint...")
+        url = f"https://formsubmit.co/ajax/{RECEIVER_EMAIL}"
+        
+        payload = {
+            "_subject": subject,
+            "name": "Megamart Price Monitor",
+            "message": body.strip()
+        }
+        
+        data = json.dumps(payload).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url, 
+            data=data, 
+            headers={
+                'Content-Type': 'application/json',
+                'Origin': 'http://localhost',
+                'Referer': 'http://localhost/',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            method='POST'
+        )
+        
         with urllib.request.urlopen(req, timeout=15) as response:
             res_data = response.read().decode('utf-8')
-            if response.status == 200 or "Submission Received" in res_data or "Thank You" in res_data:
-                logging.info("Email submitted successfully to FormSubmit!")
+            res_json = json.loads(res_data)
+            
+            if res_json.get("success") == "true" or "needs Activation" in res_json.get("message", ""):
+                logging.info("AJAX Email submitted successfully!")
                 return True
             else:
-                logging.error(f"Unexpected response: {res_data[:200]}")
+                logging.error(f"FormSubmit error: {res_json.get('message')}")
                 return False
                 
     except Exception as e:
