@@ -2,8 +2,10 @@ name: Megamart Price Monitor
 
 on:
   schedule:
-    # Runs twice a day: at 9:30 AM and 9:30 PM KST (00:30 and 12:30 UTC)
-    - cron: '30 0,12 * * *'
+    # 8:00 AM KST (23:00 UTC of previous day)
+    - cron: '0 23 * * *'
+    # 9:00 AM KST (00:00 UTC of same day)
+    - cron: '0 0 * * *'
   workflow_dispatch: # Allows you to manually trigger the run from the GitHub Actions tab
 
 jobs:

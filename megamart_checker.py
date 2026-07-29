@@ -27,44 +27,47 @@ PRICE_THRESHOLD = 7000  # Alert if price is <= 7000 KRW
 
 def send_email(subject, body, attachment_path=None):
     try:
-        logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit...")
-        url = f"https://formsubmit.co/ajax/{RECEIVER_EMAIL}"
+        logging.info(f"Sending email notification to {RECEIVER_EMAIL} via FormSubmit standard endpoint...")
+        url = f"https://formsubmit.co/{RECEIVER_EMAIL}"
         
         boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
-        parts = []
+        body_parts = []
         
         def add_field(name, value):
-            parts.append(f'--{boundary}'.encode('utf-8'))
-            parts.append(f'Content-Disposition: form-data; name="{name}"\r\n'.encode('utf-8'))
-            parts.append(value.encode('utf-8'))
+            body_parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode('utf-8'))
             
         add_field("_subject", subject)
         add_field("name", "Megamart Price Monitor")
         add_field("message", body.strip())
+        add_field("_captcha", "false")
         
         # Add file attachment if provided
         if attachment_path and os.path.exists(attachment_path):
+            filename = os.path.basename(attachment_path)
             try:
                 with open(attachment_path, 'rb') as f:
                     file_content = f.read()
-                filename = os.path.basename(attachment_path)
-                parts.append(f'--{boundary}'.encode('utf-8'))
-                parts.append(f'Content-Disposition: form-data; name="attachment"; filename="{filename}"'.encode('utf-8'))
-                parts.append(f'Content-Type: image/png\r\n'.encode('utf-8'))
-                parts.append(file_content)
+                
+                file_header = (
+                    f'--{boundary}\r\n'
+                    f'Content-Disposition: form-data; name="attachment"; filename="{filename}"\r\n'
+                    f'Content-Type: image/png\r\n\r\n'
+                ).encode('utf-8')
+                
+                body_parts.append(file_header)
+                body_parts.append(file_content)
+                body_parts.append(b'\r\n')
             except Exception as file_err:
                 logging.error(f"Error reading attachment file: {file_err}")
                 
-        parts.append(f'--{boundary}--'.encode('utf-8'))
-        body_data = b'\r\n'.join(parts)
+        body_parts.append(f'--{boundary}--\r\n'.encode('utf-8'))
+        body_data = b''.join(body_parts)
         
         req = urllib.request.Request(
             url, 
             data=body_data, 
             headers={
                 'Content-Type': f'multipart/form-data; boundary={boundary}',
-                'Origin': 'http://localhost',
-                'Referer': 'http://localhost/',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
             method='POST'
@@ -72,13 +75,11 @@ def send_email(subject, body, attachment_path=None):
         
         with urllib.request.urlopen(req, timeout=15) as response:
             res_data = response.read().decode('utf-8')
-            res_json = json.loads(res_data)
-            
-            if res_json.get("success") == "true" or "needs Activation" in res_json.get("message", ""):
-                logging.info(f"Notification sent successfully: {res_json.get('message')}")
+            if response.status == 200 or "Submission Received" in res_data or "Thank You" in res_data:
+                logging.info("Email submitted successfully to FormSubmit!")
                 return True
             else:
-                logging.error(f"FormSubmit error: {res_json.get('message')}")
+                logging.error(f"Unexpected response: {res_data[:200]}")
                 return False
                 
     except Exception as e:
