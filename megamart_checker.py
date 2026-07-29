@@ -715,32 +715,55 @@ def generate_price_table_text():
         
     products = ['1등급 (100g)', '1+등급 (100g)', '1++등급 (100g)', '1등급 (1kg팩)']
     
-    table_lines = []
-    table_lines.append("■ 최근 7일간 가격 변동 추이 (100g 기준 단가):")
+    output_lines = []
+    output_lines.append("■ 최근 7일간 등급별 가격 변동 추이 (100g당 단가):")
     
-    # Iterate in reverse chronological order (latest date first)
-    for d in reversed(last_7_dates):
-        try:
-            parts = d.split('-')
-            display_date = f"{parts[1]}-{parts[2]}"
-        except:
-            display_date = d
-            
-        day_label = ""
-        if d == last_7_dates[-1]:
-            day_label = " (오늘)"
-        elif len(last_7_dates) >= 2 and d == last_7_dates[-2]:
-            day_label = " (어제)"
-            
-        row_parts = []
-        for p in products:
-            price = data_by_date[d].get(p)
-            price_val = f"{price:,}원" if price is not None else "-"
-            row_parts.append(f"{p} {price_val}")
-            
-        table_lines.append(f"- {display_date}{day_label} : {' | '.join(row_parts)}")
+    for p in products:
+        output_lines.append("")
+        output_lines.append(f"[ {p} ]")
         
-    return "\n".join(table_lines)
+        # Process in reverse chronological order (latest prices first)
+        for idx in range(len(last_7_dates) - 1, -1, -1):
+            d = last_7_dates[idx]
+            
+            try:
+                parts = d.split('-')
+                display_date = f"{parts[1]}-{parts[2]}"
+            except:
+                display_date = d
+                
+            day_label = ""
+            if d == last_7_dates[-1]:
+                day_label = " (오늘)"
+            elif len(last_7_dates) >= 2 and d == last_7_dates[-2]:
+                day_label = " (어제)"
+                
+            price = data_by_date[d].get(p)
+            
+            prev_price = None
+            if idx > 0:
+                prev_date = last_7_dates[idx - 1]
+                prev_price = data_by_date[prev_date].get(p)
+                
+            price_detail = ""
+            if price is not None:
+                price_str = f"{price:,}원"
+                if prev_price is not None:
+                    if price < prev_price:
+                        diff = prev_price - price
+                        price_detail = f" (▼ {diff:,}원 할인!)"
+                    elif price > prev_price:
+                        diff = price - prev_price
+                        price_detail = f" (▲ {diff:,}원 인상)"
+                else:
+                    if idx > 0:
+                        price_detail = " (재입고/신규)"
+            else:
+                price_str = "- (품절)"
+                
+            output_lines.append(f"▶ {display_date}{day_label} : {price_str}{price_detail}")
+            
+    return "\n".join(output_lines)
 
 def check_megamart_prices(driver, dry_run=False):
     logging.info(f"Navigating to Megamart Search: {SEARCH_URL}")
