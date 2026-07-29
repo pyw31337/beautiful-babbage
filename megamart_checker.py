@@ -717,25 +717,28 @@ def generate_price_table_text():
     
     table_lines = []
     table_lines.append("■ 최근 7일간 가격 변동 추이 (100g 기준 단가):")
-    table_lines.append("")
-    table_lines.append("| 날짜 | 1등급 (100g) | 1+등급 (100g) | 1++등급 (100g) | 1등급 (1kg팩) |")
-    table_lines.append("| :--- | :--- | :--- | :--- | :--- |")
     
-    for d in last_7_dates:
+    # Iterate in reverse chronological order (latest date first)
+    for d in reversed(last_7_dates):
         try:
             parts = d.split('-')
             display_date = f"{parts[1]}-{parts[2]}"
         except:
             display_date = d
             
-        row_cells = [display_date]
+        day_label = ""
+        if d == last_7_dates[-1]:
+            day_label = " (오늘)"
+        elif len(last_7_dates) >= 2 and d == last_7_dates[-2]:
+            day_label = " (어제)"
+            
+        row_parts = []
         for p in products:
             price = data_by_date[d].get(p)
-            if price is not None:
-                row_cells.append(f"{price:,}원")
-            else:
-                row_cells.append("-")
-        table_lines.append(f"| {' | '.join(row_cells)} |")
+            price_val = f"{price:,}원" if price is not None else "-"
+            row_parts.append(f"{p} {price_val}")
+            
+        table_lines.append(f"- {display_date}{day_label} : {' | '.join(row_parts)}")
         
     return "\n".join(table_lines)
 
