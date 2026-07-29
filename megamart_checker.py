@@ -672,6 +672,72 @@ def generate_interactive_dashboard():
         logging.info("dashboard.html generated successfully!")
     except Exception as e:
         logging.error(f"Failed to write dashboard.html: {e}")
+def generate_price_table_text():
+    csv_path = "history/prices.csv"
+    if not os.path.exists(csv_path):
+        return ""
+        
+    import csv
+    from collections import defaultdict
+    
+    data_by_date = defaultdict(dict)
+    all_dates = set()
+    
+    product_mapping = {
+        '한우 등심 1등급 구이용 (국내산) 100g': '1등급 (100g)',
+        '한우 등심 1+등급 구이용 (국내산) 100g': '1+등급 (100g)',
+        '한우 등심 1++등급 구이용 (국내산) 100g': '1++등급 (100g)',
+        '1등급 한우 냉장 등심 구이용 (국내산) 1kg': '1등급 (1kg팩)'
+    }
+    
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            for row in reader:
+                if len(row) >= 3:
+                    date_str, name, price_str = row[0], row[1], row[2]
+                    all_dates.add(date_str)
+                    simplified_name = product_mapping.get(name, name[:10])
+                    try:
+                        data_by_date[date_str][simplified_name] = int(price_str)
+                    except:
+                        pass
+    except Exception as e:
+        logging.error(f"Error reading prices CSV for table: {e}")
+        return ""
+        
+    sorted_dates = sorted(list(all_dates))
+    last_7_dates = sorted_dates[-7:]
+    
+    if not last_7_dates:
+        return ""
+        
+    products = ['1등급 (100g)', '1+등급 (100g)', '1++등급 (100g)', '1등급 (1kg팩)']
+    
+    table_lines = []
+    table_lines.append("■ 최근 7일간 가격 변동 추이 (100g 기준 단가):")
+    table_lines.append("")
+    table_lines.append("| 날짜 | 1등급 (100g) | 1+등급 (100g) | 1++등급 (100g) | 1등급 (1kg팩) |")
+    table_lines.append("| :--- | :--- | :--- | :--- | :--- |")
+    
+    for d in last_7_dates:
+        try:
+            parts = d.split('-')
+            display_date = f"{parts[1]}-{parts[2]}"
+        except:
+            display_date = d
+            
+        row_cells = [display_date]
+        for p in products:
+            price = data_by_date[d].get(p)
+            if price is not None:
+                row_cells.append(f"{price:,}원")
+            else:
+                row_cells.append("-")
+        table_lines.append(f"| {' | '.join(row_cells)} |")
+        
+    return "\n".join(table_lines)
 
 def check_megamart_prices(driver, dry_run=False):
     logging.info(f"Navigating to Megamart Search: {SEARCH_URL}")
@@ -759,6 +825,9 @@ def check_megamart_prices(driver, dry_run=False):
             for name, price_per_100g, price, weight in cheap_products
         ])
         email_subject = f"[알림] 메가마트 한우 등심 가격 인하! (100g당 {PRICE_THRESHOLD:,}원 이하)"
+        
+        history_table_text = generate_price_table_text()
+        
         email_body = f"""
 [메가마트 한우 등심 가격 인하 알림]
 
@@ -767,6 +836,8 @@ def check_megamart_prices(driver, dry_run=False):
 
 ■ 가격 인하 상품 목록:
 {product_list_str}
+
+{history_table_text}
 
 ■ 쇼핑몰 바로가기 링크:
 {SEARCH_URL}
