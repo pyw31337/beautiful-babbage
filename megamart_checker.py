@@ -647,6 +647,8 @@ def check_megamart_prices(driver, dry_run=False):
     # Parse items
     item_wrappers = driver.find_elements(By.CLASS_NAME, "item-wrapper")
     logging.info(f"Found {len(item_wrappers)} total items on the search page.")
+    if not item_wrappers:
+        raise RuntimeError("No item wrappers (product cards) found on the Megamart search page!")
     
     monitored_products = []
     cheap_products = []
@@ -701,10 +703,11 @@ def check_megamart_prices(driver, dry_run=False):
     
     # Log results
     logging.info(f"Total matching Hanwoo Ribeye 구이용 products: {len(monitored_products)}")
+    if not monitored_products:
+        raise RuntimeError("No matching Hanwoo Ribeye grilling products found in search results!")
     
     # Save history and generate trend chart
-    if monitored_products:
-        save_price_history_and_plot(monitored_products)
+    save_price_history_and_plot(monitored_products)
         
     if cheap_products:
         logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원/100g threshold!")
@@ -779,6 +782,8 @@ def main():
         check_megamart_prices(driver, dry_run=args.dry_run)
     except Exception as e:
         logging.error(f"Fatal error in Megamart price checker execution: {e}", exc_info=True)
+        import sys
+        sys.exit(1)
     finally:
         if driver:
             driver.quit()
