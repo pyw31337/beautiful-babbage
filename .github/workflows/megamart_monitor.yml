@@ -2,10 +2,13 @@ name: Megamart Price Monitor
 
 on:
   schedule:
-    # 8:00 AM KST (23:00 UTC of previous day)
-    - cron: '0 23 * * *'
-    # 9:00 AM KST (00:00 UTC of same day)
-    - cron: '0 0 * * *'
+    # 1. Critical morning window: Every 30 mins between 7:00 AM and 11:45 AM KST (22:00 UTC - 02:45 UTC)
+    # Uses off-peak minutes (15, 45) to bypass GitHub Actions scheduler queue delays.
+    - cron: '15,45 22,23,0,1,2 * * *'
+    
+    # 2. Off-peak hours: Every 2 hours for the rest of the day (at minute 25)
+    # KST: 1:25 PM, 3:25 PM, 5:25 PM, 7:25 PM, 9:25 PM, 11:25 PM, 1:25 AM, 3:25 AM, 5:25 AM
+    - cron: '25 4,6,8,10,12,14,16,18,20 * * *'
   workflow_dispatch: # Allows you to manually trigger the run from the GitHub Actions tab
 
 jobs:
