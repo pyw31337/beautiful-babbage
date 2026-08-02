@@ -679,6 +679,7 @@ def generate_price_table_text():
         
     import csv
     from collections import defaultdict
+    from datetime import datetime
     
     data_by_date = defaultdict(dict)
     all_dates = set()
@@ -690,6 +691,8 @@ def generate_price_table_text():
         '1등급 한우 냉장 등심 구이용 (국내산) 1kg': '1등급 (1kg팩)'
     }
     
+    lowest_db = {}
+    
     try:
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.reader(f)
@@ -700,7 +703,16 @@ def generate_price_table_text():
                     all_dates.add(date_str)
                     simplified_name = product_mapping.get(name, name[:10])
                     try:
-                        data_by_date[date_str][simplified_name] = int(price_str)
+                        price = int(price_str)
+                        data_by_date[date_str][simplified_name] = price
+                        
+                        # Track lowest price (record first date it occurred)
+                        if simplified_name not in lowest_db:
+                            lowest_db[simplified_name] = (price, date_str)
+                        else:
+                            current_min, current_date = lowest_db[simplified_name]
+                            if price < current_min:
+                                lowest_db[simplified_name] = (price, date_str)
                     except:
                         pass
     except Exception as e:
@@ -715,12 +727,28 @@ def generate_price_table_text():
         
     products = ['1등급 (100g)', '1+등급 (100g)', '1++등급 (100g)', '1등급 (1kg팩)']
     
+    # Format the lowest prices and dates in YY.MM.DD 요일 format
+    weekdays = ["월", "화", "수", "목", "금", "토", "일"]
+    formatted_lowest = {}
+    for p in products:
+        if p in lowest_db:
+            price, date_str = lowest_db[p]
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                weekday_ko = weekdays[date_obj.weekday()]
+                formatted_date = f"{date_obj.strftime('%y.%m.%d')} {weekday_ko}"
+            except Exception:
+                formatted_date = date_str
+            formatted_lowest[p] = f"역대 최저가 : {price:,}원 ({formatted_date})"
+        else:
+            formatted_lowest[p] = "역대 최저가 : 정보 없음"
+            
     output_lines = []
     output_lines.append("■ 최근 7일간 등급별 가격 변동 추이 (100g당 단가):")
     
     for p in products:
         output_lines.append("")
-        output_lines.append(f"[ {p} ]")
+        output_lines.append(f"[ {p} ] {formatted_lowest[p]}")
         
         # Process in reverse chronological order (latest prices first)
         for idx in range(len(last_7_dates) - 1, -1, -1):
