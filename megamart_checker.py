@@ -150,11 +150,12 @@ def init_driver():
 
 def save_price_history_and_plot(products):
     import csv
-    from datetime import datetime
+    from datetime import datetime, timezone, timedelta
     
     os.makedirs("history", exist_ok=True)
     csv_path = "history/prices.csv"
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    kst_tz = timezone(timedelta(hours=9))
+    today_str = datetime.now(kst_tz).strftime("%Y-%m-%d")
     
     # Append today's data
     file_exists = os.path.exists(csv_path)
