@@ -794,6 +794,28 @@ def generate_price_table_text():
             
     return "\n".join(output_lines)
 
+def normalize_product_title(title_text):
+    # Determine grade
+    if "1++" in title_text:
+        grade = "1++등급"
+    elif "1+" in title_text:
+        grade = "1+등급"
+    elif "1등급" in title_text or "1 등급" in title_text:
+        grade = "1등급"
+    else:
+        grade = None
+        
+    # Determine weight
+    is_1kg = "1kg" in title_text.lower() or "1 kg" in title_text.lower() or "1000g" in title_text.lower()
+    
+    if grade:
+        if is_1kg and grade == "1등급":
+            return '1등급 한우 냉장 등심 구이용 (국내산) 1kg'
+        else:
+            return f'한우 등심 {grade} 구이용 (국내산) 100g'
+            
+    return title_text
+
 def check_megamart_prices(driver, dry_run=False):
     logging.info(f"Navigating to Megamart Search: {SEARCH_URL}")
     driver.get(SEARCH_URL)
@@ -823,8 +845,11 @@ def check_megamart_prices(driver, dry_run=False):
                 continue
             title_text = title_els[0].text.strip()
             
-            # Filter condition: must contain both "한우" and "등심", and "구이용"
-            if "한우" in title_text and "등심" in title_text and "구이용" in title_text:
+            # Filter condition: must contain both "한우" and "등심", and either "구이용" or "스테이크용"
+            if "한우" in title_text and "등심" in title_text and ("구이용" in title_text or "스테이크용" in title_text):
+                # Normalize title to standard form for database consistency
+                normalized_title = normalize_product_title(title_text)
+                
                 # Find price
                 price_els = item.find_elements(By.CSS_SELECTOR, ".current-price .number")
                 if not price_els:
@@ -835,7 +860,6 @@ def check_megamart_prices(driver, dry_run=False):
                 price_value = int(re.sub(r"[^\d]", "", price_text))
                 
                 # Parse weight from title to calculate price per 100g
-                # Examples: "100g", "1kg", "1 kg", "600g"
                 weight = 100 # default fallback
                 weight_match = re.search(r"(\d+)\s*(g|kg)", title_text.lower())
                 if weight_match:
@@ -849,13 +873,13 @@ def check_megamart_prices(driver, dry_run=False):
                 # Calculate price per 100g
                 price_per_100g = int((price_value / weight) * 100)
                 
-                # Store (title, price_per_100g, actual_price, weight)
-                monitored_products.append((title_text, price_per_100g, price_value, weight))
-                logging.info(f"Monitored item: '{title_text}' -> {price_value:,}원 ({weight}g) | 100g당 {price_per_100g:,}원")
+                # Store (normalized_title, price_per_100g, actual_price, weight)
+                monitored_products.append((normalized_title, price_per_100g, price_value, weight))
+                logging.info(f"Monitored item: '{title_text}' (normalized: '{normalized_title}') -> {price_value:,}원 ({weight}g) | 100g당 {price_per_100g:,}원")
                 
                 # Check threshold (<= 7000 KRW/100g)
                 if price_per_100g <= PRICE_THRESHOLD:
-                    cheap_products.append((title_text, price_per_100g, price_value, weight))
+                    cheap_products.append((normalized_title, price_per_100g, price_value, weight))
                     
         except Exception as item_err:
             logging.error(f"Error parsing item card: {item_err}")
