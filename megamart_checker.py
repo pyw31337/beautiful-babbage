@@ -21,7 +21,10 @@ logging.basicConfig(
 )
 
 # Configuration Variables
-RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "pyw213@naver.com")
+RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
+if not RECEIVER_EMAIL:
+    logging.error("RECEIVER_EMAIL environment variable is not set!")
+    sys.exit(1)
 SEARCH_URL = "https://www.megamart.com/search/?text=%ED%95%9C%EC%9A%B0+%EB%93%B1%EC%8B%AC"
 PRICE_THRESHOLD = 7000  # Alert if price is <= 7000 KRW
 

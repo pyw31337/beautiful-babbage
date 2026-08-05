@@ -36,6 +36,8 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run Megamart Price Checker
+      env:
+        RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
       run: python megamart_checker.py
 
     - name: Commit and Push History

@@ -31,4 +31,5 @@ jobs:
       # Pass the GitHub action token to checker.py so it can disable itself
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
       run: python checker.py
