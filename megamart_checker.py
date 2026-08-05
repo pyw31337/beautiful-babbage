@@ -898,6 +898,26 @@ def check_megamart_prices(driver, dry_run=False):
     if cheap_products:
         logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원/100g threshold!")
         
+        # Check if alert was already sent today (maximum 1 alert per day)
+        from datetime import datetime, timezone, timedelta
+        kst_tz = timezone(timedelta(hours=9))
+        today_str = datetime.now(kst_tz).strftime("%Y-%m-%d")
+        
+        state_file = "history/last_alert_sent.txt"
+        already_sent = False
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, "r", encoding="utf-8") as sf:
+                    last_sent_date = sf.read().strip()
+                    if last_sent_date == today_str:
+                        already_sent = True
+            except Exception as se:
+                logging.error(f"Failed to read alert state file: {se}")
+                
+        if already_sent:
+            logging.info(f"Alert already sent today ({today_str}). Skipping email notification to prevent duplicate spam.")
+            return True
+            
         # Build alert email body
         product_list_str = "\n".join([
             f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)" 
@@ -927,8 +947,17 @@ def check_megamart_prices(driver, dry_run=False):
 
 ※ 이 메일은 자동 발송되었습니다.
 """
-        send_email(email_subject, email_body, attachment_path="history/price_trend.png")
-        return True
+        sent_success = send_email(email_subject, email_body, attachment_path="history/price_trend.png")
+        if sent_success:
+            # Write state to state_file to prevent multiple alerts today
+            try:
+                os.makedirs("history", exist_ok=True)
+                with open(state_file, "w", encoding="utf-8") as sf:
+                    sf.write(today_str)
+                logging.info(f"Recorded alert sent date: {today_str}")
+            except Exception as se:
+                logging.error(f"Failed to write alert state file: {se}")
+        return sent_success
     else:
         logging.info(f"No products found below the {PRICE_THRESHOLD:,}원/100g threshold.")
         if dry_run:
