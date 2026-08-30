@@ -25,8 +25,10 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 if not RECEIVER_EMAIL:
     logging.error("RECEIVER_EMAIL environment variable is not set!")
     sys.exit(1)
-SEARCH_URL = "https://www.megamart.com/search/?text=%ED%95%9C%EC%9A%B0+%EB%93%B1%EC%8B%AC"
-PRICE_THRESHOLD = 7000  # Alert if price is <= 7000 KRW
+BEEF_SEARCH_URL = "https://www.megamart.com/search/?text=%ED%95%9C%EC%9A%B0+%EB%93%B1%EC%8B%AC"
+PORK_SEARCH_URL = "https://www.megamart.com/search/?text=%EC%82%BC%EA%B2%B9%EC%82%B4+%EA%B5%AD%EB%82%B4%EC%82%B0"
+BEEF_PRICE_THRESHOLD = 7000  # Alert if beef price is <= 7000 KRW/100g
+PORK_PRICE_THRESHOLD = 2000  # Alert if pork price is <= 2000 KRW/100g
 
 def upload_to_tmpfiles(file_path):
     try:
@@ -208,9 +210,6 @@ def save_price_history_and_plot(products):
                     history_data[name]["dates"].append(date_val)
                     history_data[name]["prices"].append(price)
 
-        plt.figure(figsize=(10, 6))
-        plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
-
         import platform
         system = platform.system()
         if system == 'Darwin':
@@ -220,24 +219,49 @@ def save_price_history_and_plot(products):
         else:
             plt.rcParams['font.family'] = 'NanumGothic'
         plt.rcParams['axes.unicode_minus'] = False
-        
+
+        # Separate beef and pork history
+        beef_history = {}
+        pork_history = {}
         for name, data in history_data.items():
-            sorted_pairs = sorted(zip(data["dates"], data["prices"]))
-            sorted_dates, sorted_prices = zip(*sorted_pairs)
-            
-            short_name = name.replace(" (국내산) 100g", "").replace("등급 구이용", "")
-            plt.plot(sorted_dates, sorted_prices, marker='o', linewidth=2, label=short_name)
-            
-        plt.title("Megamart Hanwoo Ribeye Price Trend (per 100g)", fontsize=14, fontweight='bold', pad=15)
-        plt.xlabel("Date", fontsize=12)
-        plt.ylabel("Price (KRW)", fontsize=12)
+            if "삼겹살" in name:
+                pork_history[name] = data
+            else:
+                beef_history[name] = data
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
+        plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
+
+        # 1. Plot Beef Ribeye on ax1 (Top)
+        if beef_history:
+            for name, data in beef_history.items():
+                sorted_pairs = sorted(zip(data["dates"], data["prices"]))
+                sorted_dates, sorted_prices = zip(*sorted_pairs)
+                short_name = name.replace(" (국내산) 100g", "").replace("등급 구이용", "")
+                ax1.plot(sorted_dates, sorted_prices, marker='o', linewidth=2, label=short_name)
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+            ax1.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(sorted_dates)//10)))
+        ax1.set_title("한우 등심 가격 추이 (100g당 단가)", fontsize=12, fontweight='bold')
+        ax1.set_ylabel("가격 (원)", fontsize=10)
+        ax1.axhline(y=7000, color='r', linestyle='--', alpha=0.7, label="Threshold (7,000원)")
+        ax1.legend(loc="upper right", frameon=True, shadow=True)
+        ax1.tick_params(axis='x', rotation=30)
         
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-        plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(history_data)//10)))
-        plt.gcf().autofmt_xdate()
+        # 2. Plot Pork Belly on ax2 (Bottom)
+        if pork_history:
+            for name, data in pork_history.items():
+                sorted_pairs = sorted(zip(data["dates"], data["prices"]))
+                sorted_dates, sorted_prices = zip(*sorted_pairs)
+                short_name = name.replace(" (국내산)", "")
+                ax2.plot(sorted_dates, sorted_prices, marker='s', linewidth=2, label=short_name)
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+            ax2.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(sorted_dates)//10)))
+        ax2.set_title("국내산 삼겹살 가격 추이 (100g당 단가)", fontsize=12, fontweight='bold')
+        ax2.set_ylabel("가격 (원)", fontsize=10)
+        ax2.axhline(y=2000, color='r', linestyle='--', alpha=0.7, label="Threshold (2,000원)")
+        ax2.legend(loc="upper right", frameon=True, shadow=True)
+        ax2.tick_params(axis='x', rotation=30)
         
-        plt.axhline(y=PRICE_THRESHOLD, color='r', linestyle='--', alpha=0.7, label=f"Threshold ({PRICE_THRESHOLD:,}원)")
-        plt.legend(loc="upper right", frameon=True, shadow=True)
         plt.tight_layout()
         
         chart_path = "history/price_trend.png"
@@ -265,20 +289,19 @@ def update_readme(products, today_str):
 
 ---
 
-## 🥩 메가마트 한우 등심 100g 가격 실시간 추이
-* **설정 가격 기준**: 100g 당 **{PRICE_THRESHOLD:,}원 이하**일 때 이메일 알림 발송
+## 🥩 메가마트 소고기(한우 등심) & 돼지고기(국내산 삼겹살) 실시간 추이
+* **설정 가격 기준**: 소고기 100g당 **{BEEF_PRICE_THRESHOLD:,}원 이하** / 돼지고기 100g당 **{PORK_PRICE_THRESHOLD:,}원 이하**일 때 이메일 알림 발송
 
 ### 📌 최근 수집된 가격
 {latest_prices_str}
 
 ### 📈 가격 추이 그래프
-![한우 등심 가격 추이](history/price_trend.png)
+![가격 추이](history/price_trend.png)
 
 ---
 
 ## 📅 네이버 예약 모니터링 (애슐리퀸즈 여의도한강공원점)
-* **대상 일자**: 2026년 8월 15일 광복절
-* **동작 방식**: 예약이 열리는 즉시 이메일 발송 후 감시가 자동으로 종료됩니다.
+* **대상 일자**: 2026년 8월 15일 광복절 (프로젝트 종료)
 """
         with open(readme_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -317,7 +340,7 @@ def generate_interactive_dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메가마트 한우 등심 가격 추이 대시보드</title>
+    <title>메가마트 소고기 & 돼지고기 가격 추이 대시보드</title>
     <!-- Premium Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
     <!-- Chart.js -->
@@ -460,7 +483,7 @@ def generate_interactive_dashboard():
         }
         .chart-container {
             position: relative;
-            height: 450px;
+            height: 380px;
             width: 100%;
         }
         .info-footer {
@@ -474,8 +497,8 @@ def generate_interactive_dashboard():
 <body>
     <div class="container">
         <header>
-            <h1>🥩 한우 등심 가격 추이 대시보드</h1>
-            <div class="subtitle">메가마트 한우 등심 100g 단가 실시간 모니터링</div>
+            <h1>🥩 소고기 & 🐷 돼지고기 가격 대시보드</h1>
+            <div class="subtitle">메가마트 한우 등심 & 국내산 삼겹살 가격 실시간 모니터링</div>
         </header>
 
         <div class="card">
@@ -497,8 +520,16 @@ def generate_interactive_dashboard():
         </div>
 
         <div class="card">
+            <h2 style="margin-top:0; font-size:1.4rem; color:var(--accent-color);">🥩 소고기 (한우 등심) 가격 추이</h2>
             <div class="chart-container">
-                <canvas id="priceChart"></canvas>
+                <canvas id="priceChartBeef"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-top:0; font-size:1.4rem; color:var(--accent-color);">🐷 돼지고기 (국내산 삼겹살) 가격 추이</h2>
+            <div class="chart-container">
+                <canvas id="priceChartPork"></canvas>
             </div>
         </div>
 
@@ -515,7 +546,8 @@ def generate_interactive_dashboard():
         const products = [...new Set(PRICE_DATA.map(item => item.product_name))];
         let activeProducts = [...products];
         let activePeriod = 0; // 0 means all-time
-        let chart = null;
+        let beefChart = null;
+        let porkChart = null;
 
         // Color palettes for line charts
         const colors = [
@@ -523,7 +555,9 @@ def generate_interactive_dashboard():
             '#ff007f', // Pink
             '#ffb300', // Yellow
             '#00e676', // Green
-            '#d500f9'  // Purple
+            '#d500f9', // Purple
+            '#ff9800', // Orange
+            '#2196f3'  // Blue
         ];
 
         // Format dates correctly
@@ -538,10 +572,11 @@ def generate_interactive_dashboard():
             const label = document.createElement("label");
             label.className = "checkbox-item active";
             label.id = `label-${index}`;
+            let display_name = prod.replace(" (국내산) 100g", "").replace("등급 구이용", "").replace(" (국내산)", "");
             label.innerHTML = `
                 <input type="checkbox" checked onchange="toggleProduct('${prod}', ${index})">
                 <span class="indicator"></span>
-                <span>${prod.replace(" (국내산) 100g", "").replace("등급 구이용", "")}</span>
+                <span>${display_name}</span>
             `;
             filterContainer.appendChild(label);
         });
@@ -555,7 +590,7 @@ def generate_interactive_dashboard():
                 activeProducts.push(prod);
                 label.classList.add("active");
             }
-            updateChart();
+            updateCharts();
         };
 
         const setPeriod = (days) => {
@@ -564,12 +599,10 @@ def generate_interactive_dashboard():
             document.getElementById("btn-30").classList.remove("active");
             document.getElementById("btn-0").classList.remove("active");
             document.getElementById(`btn-${days}`).classList.add("active");
-            updateChart();
+            updateCharts();
         };
 
-        const updateChart = () => {
-            const ctx = document.getElementById('priceChart').getContext('2d');
-            
+        const updateCharts = () => {
             // Get all unique dates
             let dates = [...new Set(PRICE_DATA.map(item => item.date))].sort();
             
@@ -581,88 +614,105 @@ def generate_interactive_dashboard():
                 dates = dates.filter(d => d >= limitStr);
             }
 
-            // Create datasets
-            const datasets = activeProducts.map((prod, index) => {
-                const prodData = PRICE_DATA.filter(item => item.product_name === prod);
-                const dataPoints = dates.map(date => {
-                    const found = prodData.find(item => item.date === date);
-                    return found ? found.price : null;
+            const buildChartConfig = (filterFunc, threshold, thresholdLabel) => {
+                const groupProducts = activeProducts.filter(filterFunc);
+                
+                const datasets = groupProducts.map((prod, index) => {
+                    const prodData = PRICE_DATA.filter(item => item.product_name === prod);
+                    const dataPoints = dates.map(date => {
+                        const found = prodData.find(item => item.date === date);
+                        return found ? found.price : null;
+                    });
+
+                    return {
+                        label: prod.replace(" (국내산) 100g", "").replace("등급 구이용", "").replace(" (국내산)", ""),
+                        data: dataPoints,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        tension: 0.15,
+                        spanGaps: true
+                    };
+                });
+
+                // Add threshold line
+                datasets.push({
+                    label: thresholdLabel,
+                    data: Array(dates.length).fill(threshold),
+                    borderColor: '#ff4444',
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    fill: false
                 });
 
                 return {
-                    label: prod.replace(" (국내산) 100g", "").replace("등급 구이용", ""),
-                    data: dataPoints,
-                    borderColor: colors[index % colors.length],
-                    backgroundColor: colors[index % colors.length] + '20',
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    tension: 0.15,
-                    spanGaps: true
-                };
-            });
-
-            // Add threshold line
-            datasets.push({
-                label: '알림 기준가 (7,000원)',
-                data: Array(dates.length).fill(7000),
-                borderColor: '#ff4444',
-                borderDash: [5, 5],
-                pointRadius: 0,
-                borderWidth: 1.5,
-                fill: false
-            });
-
-            if (chart) {
-                chart.destroy();
-            }
-
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dates.map(d => formatShortDate(d)),
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#888' }
-                        },
-                        y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#888' }
-                        }
+                    type: 'line',
+                    data: {
+                        labels: dates.map(d => formatShortDate(d)),
+                        datasets: datasets
                     },
-                    plugins: {
-                        legend: {
-                            labels: { color: '#fff', font: { family: 'Noto Sans KR' } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#888' }
+                            },
+                            y: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#888' }
+                            }
                         },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
+                        plugins: {
+                            legend: {
+                                labels: { color: '#fff', font: { family: 'Noto Sans KR' } }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y).replace('₩', '') + '원';
+                                        }
+                                        return label;
                                     }
-                                    if (context.parsed.y !== null) {
-                                        label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y).replace('₩', '') + '원';
-                                    }
-                                    return label;
                                 }
                             }
                         }
                     }
-                }
-            });
+                };
+            };
+
+            // 1. Update Beef Chart
+            if (beefChart) {
+                beefChart.destroy();
+            }
+            beefChart = new Chart(
+                document.getElementById('priceChartBeef').getContext('2d'),
+                buildChartConfig((prod) => !prod.includes("삼겹살"), 7000, '알림 기준가 (7,000원)')
+            );
+
+            // 2. Update Pork Chart
+            if (porkChart) {
+                porkChart.destroy();
+            }
+            porkChart = new Chart(
+                document.getElementById('priceChartPork').getContext('2d'),
+                buildChartConfig((prod) => prod.includes("삼겹살"), 2000, '알림 기준가 (2,000원)')
+            );
         };
 
         // Initial render
-        updateChart();
+        updateCharts();
     </script>
 </body>
 </html>"""
@@ -689,10 +739,18 @@ def generate_price_table_text():
     all_dates = set()
     
     product_mapping = {
+        # Beef
         '한우 등심 1등급 구이용 (국내산) 100g': '1등급 (100g)',
         '한우 등심 1+등급 구이용 (국내산) 100g': '1+등급 (100g)',
         '한우 등심 1++등급 구이용 (국내산) 100g': '1++등급 (100g)',
-        '1등급 한우 냉장 등심 구이용 (국내산) 1kg': '1등급 (1kg팩)'
+        '1등급 한우 냉장 등심 구이용 (국내산) 1kg': '1등급 (1kg팩)',
+        # Pork
+        '돼지 삼겹살 (100g)': '삼겹살 (100g)',
+        '돼지 삼겹살 (1kg팩)': '삼겹살 (1kg팩)',
+        '꽃 삼겹살 (600g)': '꽃삼겹 (600g)',
+        '흑돼지 삼겹살 (100g)': '흑돼지 (100g)',
+        '제주 삼겹살 (100g)': '제주 (100g)',
+        '포크밸리 삼겹살 (100g)': '포크밸리 (100g)'
     }
     
     lowest_db = {}
@@ -710,7 +768,7 @@ def generate_price_table_text():
                         price = int(price_str)
                         data_by_date[date_str][simplified_name] = price
                         
-                        # Track lowest price (record first date it occurred)
+                        # Track lowest price
                         if simplified_name not in lowest_db:
                             lowest_db[simplified_name] = (price, date_str)
                         else:
@@ -729,13 +787,19 @@ def generate_price_table_text():
     if not last_7_dates:
         return ""
         
-    products = ['1등급 (100g)', '1+등급 (100g)', '1++등급 (100g)', '1등급 (1kg팩)']
+    beef_products = ['1등급 (100g)', '1+등급 (100g)', '1++등급 (100g)', '1등급 (1kg팩)']
+    pork_products = ['삼겹살 (100g)', '삼겹살 (1kg팩)', '꽃삼겹 (600g)', '흑돼지 (100g)', '제주 (100g)', '포크밸리 (100g)']
     
-    # Format the lowest prices and dates in YY.MM.DD 요일 format
     weekdays = ["월", "화", "수", "목", "금", "토", "일"]
-    formatted_lowest = {}
-    for p in products:
-        if p in lowest_db:
+    
+    def format_group_prices(group_name, products_list):
+        group_lines = []
+        group_lines.append(f"=== [{group_name}] ===")
+        for p in products_list:
+            # Check if there is any history at all for this product in last 7 days or ever
+            if p not in lowest_db:
+                continue
+                
             price, date_str = lowest_db[p]
             try:
                 date_obj = datetime.strptime(date_str, "%Y-%m-%d")
@@ -743,58 +807,57 @@ def generate_price_table_text():
                 formatted_date = f"{date_obj.strftime('%y.%m.%d')} {weekday_ko}"
             except Exception:
                 formatted_date = date_str
-            formatted_lowest[p] = f"역대 최저가 : {price:,}원 ({formatted_date})"
-        else:
-            formatted_lowest[p] = "역대 최저가 : 정보 없음"
+            lowest_text = f"역대 최저가 : {price:,}원 ({formatted_date})"
             
+            group_lines.append(f"[ {p} ] {lowest_text}")
+            
+            # Print last 7 dates
+            for idx in range(len(last_7_dates) - 1, -1, -1):
+                d = last_7_dates[idx]
+                try:
+                    parts = d.split('-')
+                    display_date = f"{parts[1]}-{parts[2]}"
+                except:
+                    display_date = d
+                    
+                day_label = ""
+                if d == last_7_dates[-1]:
+                    day_label = " (오늘)"
+                elif len(last_7_dates) >= 2 and d == last_7_dates[-2]:
+                    day_label = " (어제)"
+                    
+                price_val = data_by_date[d].get(p)
+                prev_price = None
+                if idx > 0:
+                    prev_date = last_7_dates[idx - 1]
+                    prev_price = data_by_date[prev_date].get(p)
+                    
+                price_detail = ""
+                if price_val is not None:
+                    price_str = f"{price_val:,}원"
+                    if prev_price is not None:
+                        if price_val < prev_price:
+                            diff = prev_price - price_val
+                            price_detail = f" (▼ {diff:,}원 할인!)"
+                        elif price_val > prev_price:
+                            diff = price_val - prev_price
+                            price_detail = f" (▲ {diff:,}원 인상)"
+                    else:
+                        if idx > 0:
+                            price_detail = " (재입고/신규)"
+                else:
+                    price_str = "- (품절)"
+                    
+                group_lines.append(f"▶ {display_date}{day_label} : {price_str}{price_detail}")
+            group_lines.append("") # blank line between products
+        return group_lines
+
     output_lines = []
     output_lines.append("■ 최근 7일간 등급별 가격 변동 추이 (100g당 단가):")
+    output_lines.append("")
+    output_lines.extend(format_group_prices("소고기 - 한우 등심", beef_products))
+    output_lines.extend(format_group_prices("돼지고기 - 국내산 삼겹살", pork_products))
     
-    for p in products:
-        output_lines.append("")
-        output_lines.append(f"[ {p} ] {formatted_lowest[p]}")
-        
-        # Process in reverse chronological order (latest prices first)
-        for idx in range(len(last_7_dates) - 1, -1, -1):
-            d = last_7_dates[idx]
-            
-            try:
-                parts = d.split('-')
-                display_date = f"{parts[1]}-{parts[2]}"
-            except:
-                display_date = d
-                
-            day_label = ""
-            if d == last_7_dates[-1]:
-                day_label = " (오늘)"
-            elif len(last_7_dates) >= 2 and d == last_7_dates[-2]:
-                day_label = " (어제)"
-                
-            price = data_by_date[d].get(p)
-            
-            prev_price = None
-            if idx > 0:
-                prev_date = last_7_dates[idx - 1]
-                prev_price = data_by_date[prev_date].get(p)
-                
-            price_detail = ""
-            if price is not None:
-                price_str = f"{price:,}원"
-                if prev_price is not None:
-                    if price < prev_price:
-                        diff = prev_price - price
-                        price_detail = f" (▼ {diff:,}원 할인!)"
-                    elif price > prev_price:
-                        diff = price - prev_price
-                        price_detail = f" (▲ {diff:,}원 인상)"
-                else:
-                    if idx > 0:
-                        price_detail = " (재입고/신규)"
-            else:
-                price_str = "- (품절)"
-                
-            output_lines.append(f"▶ {display_date}{day_label} : {price_str}{price_detail}")
-            
     return "\n".join(output_lines)
 
 def normalize_product_title(title_text):
@@ -819,26 +882,44 @@ def normalize_product_title(title_text):
             
     return title_text
 
-def check_megamart_prices(driver, dry_run=False):
-    logging.info(f"Navigating to Megamart Search: {SEARCH_URL}")
-    driver.get(SEARCH_URL)
-    
-    # Wait for search elements to render
+def normalize_pork_title(title_text):
+    # Normalize pork titles
+    if "꽃" in title_text:
+        return '꽃 삼겹살 (600g)'
+    elif "1kg" in title_text.lower() or "1000g" in title_text.lower():
+        return '돼지 삼겹살 (1kg팩)'
+    elif "흑돼지" in title_text:
+        return '흑돼지 삼겹살 (100g)'
+    elif "제주" in title_text:
+        return '제주 삼겹살 (100g)'
+    elif "포크밸리" in title_text:
+        return '포크밸리 삼겹살 (100g)'
+    elif "삼겹살" in title_text:
+        return '돼지 삼겹살 (100g)'
+    return title_text
+
+def scrape_search_page(driver, url, is_pork=False):
+    logging.info(f"Navigating to Megamart Search: {url}")
+    driver.get(url)
     time.sleep(5)
     
-    # Take visual inspection screenshot
+    # Save a screenshot for debugging
     os.makedirs("screenshots", exist_ok=True)
-    driver.save_screenshot("screenshots/megamart_step1_loaded.png")
-    logging.info("Page loaded. Saved screenshot/megamart_step1_loaded.png")
+    suffix = "pork" if is_pork else "beef"
+    driver.save_screenshot(f"screenshots/megamart_step1_loaded_{suffix}.png")
+    logging.info(f"Page loaded. Saved screenshots/megamart_step1_loaded_{suffix}.png")
     
-    # Parse items
     item_wrappers = driver.find_elements(By.CLASS_NAME, "item-wrapper")
     logging.info(f"Found {len(item_wrappers)} total items on the search page.")
     if not item_wrappers:
-        raise RuntimeError("No item wrappers (product cards) found on the Megamart search page!")
-    
+        logging.warning(f"No item wrappers found for {url}!")
+        return [], []
+        
     monitored_products = []
     cheap_products = []
+    
+    # Exclude keywords for pork
+    forbidden_pork_keywords = ["목심", "목살", "앞다리", "뒷다리", "냉동", "갈매기살", "항정살", "수입"]
     
     for item in item_wrappers:
         try:
@@ -848,22 +929,32 @@ def check_megamart_prices(driver, dry_run=False):
                 continue
             title_text = title_els[0].text.strip()
             
-            # Filter condition: must contain both "한우" and "등심", and either "구이용" or "스테이크용"
-            if "한우" in title_text and "등심" in title_text and ("구이용" in title_text or "스테이크용" in title_text):
-                # Normalize title to standard form for database consistency
-                normalized_title = normalize_product_title(title_text)
+            # Match condition
+            if is_pork:
+                has_pork_belly = "삼겹살" in title_text
+                has_forbidden = any(k in title_text for k in forbidden_pork_keywords)
+                is_matched = has_pork_belly and not has_forbidden
+            else:
+                is_matched = "한우" in title_text and "등심" in title_text and ("구이용" in title_text or "스테이크용" in title_text)
                 
+            if is_matched:
+                # Normalize title
+                if is_pork:
+                    normalized_title = normalize_pork_title(title_text)
+                    threshold = PORK_PRICE_THRESHOLD
+                else:
+                    normalized_title = normalize_product_title(title_text)
+                    threshold = BEEF_PRICE_THRESHOLD
+                    
                 # Find price
                 price_els = item.find_elements(By.CSS_SELECTOR, ".current-price .number")
                 if not price_els:
                     continue
                 price_text = price_els[0].text.strip()
-                
-                # Convert to integer (e.g. "12,640" -> 12640)
                 price_value = int(re.sub(r"[^\d]", "", price_text))
                 
-                # Parse weight from title to calculate price per 100g
-                weight = 100 # default fallback
+                # Parse weight
+                weight = 100
                 weight_match = re.search(r"(\d+)\s*(g|kg)", title_text.lower())
                 if weight_match:
                     val = int(weight_match.group(1))
@@ -872,36 +963,48 @@ def check_megamart_prices(driver, dry_run=False):
                         weight = val * 1000
                     else:
                         weight = val
+                        
+                price_per_100g = int((price_value / weight) * 100) if weight > 0 else 0
                 
-                # Calculate price per 100g
-                price_per_100g = int((price_value / weight) * 100)
-                
-                # Store (normalized_title, price_per_100g, actual_price, weight)
                 monitored_products.append((normalized_title, price_per_100g, price_value, weight))
                 logging.info(f"Monitored item: '{title_text}' (normalized: '{normalized_title}') -> {price_value:,}원 ({weight}g) | 100g당 {price_per_100g:,}원")
                 
-                # Check threshold (<= 7000 KRW/100g)
-                if price_per_100g <= PRICE_THRESHOLD:
+                if price_per_100g <= threshold:
                     cheap_products.append((normalized_title, price_per_100g, price_value, weight))
                     
         except Exception as item_err:
             logging.error(f"Error parsing item card: {item_err}")
             
+    return monitored_products, cheap_products
+
+def check_megamart_prices(driver, dry_run=False):
+    # 1. Scrape Beef
+    beef_monitored, beef_cheap = scrape_search_page(driver, BEEF_SEARCH_URL, is_pork=False)
+    
+    # 2. Scrape Pork
+    pork_monitored, pork_cheap = scrape_search_page(driver, PORK_SEARCH_URL, is_pork=True)
+    
+    # Combine results
+    monitored_products = beef_monitored + pork_monitored
+    cheap_products = beef_cheap + pork_cheap
+    
     # Save final check screenshot
     driver.save_screenshot("screenshots/megamart_step2_check.png")
     
-    # Log results
-    logging.info(f"Total matching Hanwoo Ribeye 구이용 products: {len(monitored_products)}")
-    if not monitored_products:
-        raise RuntimeError("No matching Hanwoo Ribeye grilling products found in search results!")
+    logging.info(f"Total matching Beef products: {len(beef_monitored)}")
+    logging.info(f"Total matching Pork products: {len(pork_monitored)}")
     
+    if not monitored_products:
+        raise RuntimeError("No matching products found in either beef or pork search results!")
+        
     # Save history and generate trend chart
     save_price_history_and_plot(monitored_products)
-        
+    
+    # Build alert if either beef or pork has cheap products
     if cheap_products:
-        logging.info(f"ALERT: Found {len(cheap_products)} products below {PRICE_THRESHOLD:,}원/100g threshold!")
+        logging.info(f"ALERT: Found {len(cheap_products)} products below threshold!")
         
-        # Check if alert was already sent today (maximum 1 alert per day)
+        # Check rate limiting (maximum 1 alert per day)
         from datetime import datetime, timezone, timedelta
         kst_tz = timezone(timedelta(hours=9))
         today_str = datetime.now(kst_tz).strftime("%Y-%m-%d")
@@ -922,27 +1025,38 @@ def check_megamart_prices(driver, dry_run=False):
             return True
             
         # Build alert email body
-        product_list_str = "\n".join([
-            f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)" 
-            for name, price_per_100g, price, weight in cheap_products
-        ])
-        email_subject = f"[알림] 메가마트 한우 등심 가격 인하! (100g당 {PRICE_THRESHOLD:,}원 이하)"
+        beef_list_str = "\n".join([
+            f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)"
+            for name, price_per_100g, price, weight in beef_cheap
+        ]) or "없음"
+        
+        pork_list_str = "\n".join([
+            f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)"
+            for name, price_per_100g, price, weight in pork_cheap
+        ]) or "없음"
+        
+        email_subject = "[알림] 메가마트 한우 등심 & 삼겹살 가격 인하!"
         
         history_table_text = generate_price_table_text()
         
         email_body = f"""
-[메가마트 한우 등심 가격 인하 알림]
+[메가마트 한우 등심 & 삼겹살 가격 인하 알림]
 
-설정한 조건(100g 당 {PRICE_THRESHOLD:,}원 이하)을 만족하는 한우 등심 상품이 감지되었습니다!
+설정한 조건(소고기 100g당 {BEEF_PRICE_THRESHOLD:,}원 이하 / 돼지고기 100g당 {PORK_PRICE_THRESHOLD:,}원 이하)을 만족하는 상품이 감지되었습니다!
 지금 바로 할인 혜택을 확인하고 구매해 보세요.
 
 ■ 가격 인하 상품 목록:
-{product_list_str}
+[ 소고기 (한우 등심) ]
+{beef_list_str}
+
+[ 돼지고기 (국내산 삼겹살) ]
+{pork_list_str}
 
 {history_table_text}
 
 ■ 쇼핑몰 바로가기 링크:
-{SEARCH_URL}
+- 소고기: {BEEF_SEARCH_URL}
+- 돼지고기: {PORK_SEARCH_URL}
 
 ■ 실시간 인터랙티브 대시보드 바로가기 (기간/상품 다이내믹 필터링):
 - 로컬 파일: workspace의 'dashboard.html' 파일을 브라우저로 직접 열어주세요.
@@ -952,7 +1066,6 @@ def check_megamart_prices(driver, dry_run=False):
 """
         sent_success = send_email(email_subject, email_body, attachment_path="history/price_trend.png")
         if sent_success:
-            # Write state to state_file to prevent multiple alerts today
             try:
                 os.makedirs("history", exist_ok=True)
                 with open(state_file, "w", encoding="utf-8") as sf:
@@ -962,37 +1075,35 @@ def check_megamart_prices(driver, dry_run=False):
                 logging.error(f"Failed to write alert state file: {se}")
         return sent_success
     else:
-        logging.info(f"No products found below the {PRICE_THRESHOLD:,}원/100g threshold.")
+        logging.info("No products found below the threshold.")
         if dry_run:
             logging.info("[Dry Run] Sending test email with current prices.")
-            product_list_str = "\n".join([
-                f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)" 
-                for name, price_per_100g, price, weight in monitored_products
-            ])
+            beef_list_str = "\n".join([
+                f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)"
+                for name, price_per_100g, price, weight in beef_monitored
+            ]) or "없음"
             
-            test_subject = "[테스트] 메가마트 한우 등심 가격 모니터링 테스트"
+            pork_list_str = "\n".join([
+                f"- {name}: 100g당 {price_per_100g:,}원 (현재 판매가: {price:,}원/{weight}g)"
+                for name, price_per_100g, price, weight in pork_monitored
+            ]) or "없음"
+            
+            test_subject = "[테스트] 메가마트 소고기 & 돼지고기 가격 모니터링 테스트"
             test_body = f"""
-[메가마트 한우 등심 모니터링 테스트 메일]
+[메가마트 소고기 & 돼지고기 모니터링 테스트 메일]
 
 메가마트 가격 감시 스크립트가 정상적으로 동작하고 있습니다.
 
-■ 현재 검색된 한우 등심 100g 상품 목록:
-{product_list_str}
+■ 현재 검색된 소고기 상품 목록:
+{beef_list_str}
 
-현재 가격은 설정한 기준({PRICE_THRESHOLD:,}원 이하)보다 높은 상태이므로, 실제 구매 알림 메일은 발송되지 않았습니다.
-실제 가격이 {PRICE_THRESHOLD:,}원 이하로 떨어지면 구매 알림 이메일이 발송됩니다.
+■ 현재 검색된 돼지고기 상품 목록:
+{pork_list_str}
 
-■ 쇼핑몰 바로가기 링크:
-{SEARCH_URL}
-
-■ 실시간 인터랙티브 대시보드 바로가기 (기간/상품 다이내믹 필터링):
-- 로컬 파일: workspace의 'dashboard.html' 파일을 브라우저로 직접 열어주세요.
-- 깃허브 웹: https://github.com/pyw31337/beautiful-babbage/blob/main/dashboard.html
-
-※ 이 메일은 자동 발송되었습니다.
+현재 가격은 설정한 기준(소고기 {BEEF_PRICE_THRESHOLD:,}원 이하 / 돼지고기 {PORK_PRICE_THRESHOLD:,}원 이하)보다 높은 상태이므로, 실제 구매 알림 메일은 발송되지 않았습니다.
 """
             send_email(test_subject, test_body, attachment_path="history/price_trend.png")
-        return False
+        return True
 
 def main():
     parser = argparse.ArgumentParser(description="Megamart Hanwoo Ribeye Price Monitor")

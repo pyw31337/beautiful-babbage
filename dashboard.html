@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메가마트 한우 등심 가격 추이 대시보드</title>
+    <title>메가마트 소고기 & 돼지고기 가격 추이 대시보드</title>
     <!-- Premium Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
     <!-- Chart.js -->
@@ -146,7 +146,7 @@
         }
         .chart-container {
             position: relative;
-            height: 450px;
+            height: 380px;
             width: 100%;
         }
         .info-footer {
@@ -160,8 +160,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🥩 한우 등심 가격 추이 대시보드</h1>
-            <div class="subtitle">메가마트 한우 등심 100g 단가 실시간 모니터링</div>
+            <h1>🥩 소고기 & 🐷 돼지고기 가격 대시보드</h1>
+            <div class="subtitle">메가마트 한우 등심 & 국내산 삼겹살 가격 실시간 모니터링</div>
         </header>
 
         <div class="card">
@@ -183,8 +183,16 @@
         </div>
 
         <div class="card">
+            <h2 style="margin-top:0; font-size:1.4rem; color:var(--accent-color);">🥩 소고기 (한우 등심) 가격 추이</h2>
             <div class="chart-container">
-                <canvas id="priceChart"></canvas>
+                <canvas id="priceChartBeef"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-top:0; font-size:1.4rem; color:var(--accent-color);">🐷 돼지고기 (국내산 삼겹살) 가격 추이</h2>
+            <div class="chart-container">
+                <canvas id="priceChartPork"></canvas>
             </div>
         </div>
 
@@ -195,13 +203,14 @@
 
     <script>
         // Data injected by python script
-        const PRICE_DATA = [{"date": "2026-07-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-24", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-24", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-25", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-25", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-25", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-26", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-26", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-26", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-27", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-27", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-27", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-27", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 10240}, {"date": "2026-07-28", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 10240}, {"date": "2026-07-28", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-28", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-28", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-29", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6912}, {"date": "2026-07-29", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-07-29", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 19800}, {"date": "2026-07-29", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-30", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 19800}, {"date": "2026-07-30", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-30", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5192}, {"date": "2026-07-30", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6400}, {"date": "2026-07-31", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5192}, {"date": "2026-07-31", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6400}, {"date": "2026-07-31", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 19800}, {"date": "2026-08-01", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6144}, {"date": "2026-08-01", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-01", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 12460}, {"date": "2026-08-02", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-03", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-04", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-04", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6144}, {"date": "2026-08-05", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-08-05", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 10240}, {"date": "2026-08-05", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-08-11", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 1280}, {"date": "2026-08-11", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 1264}, {"date": "2026-08-11", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 1280}, {"date": "2026-08-11", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 1264}, {"date": "2026-08-12", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-12", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-12", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-12", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-13", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-13", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-13", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-13", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-14", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-14", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-14", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-14", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-15", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-15", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-15", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-16", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-16", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-16", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-17", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-17", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-17", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-18", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-18", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-18", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-19", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-19", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-20", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-20", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-21", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-21", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-22", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-22", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-23", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-23", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-25", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6400}, {"date": "2026-08-25", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-25", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-26", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-26", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-26", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-26", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-27", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-27", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-28", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-28", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-29", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-29", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-30", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-30", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}];
+        const PRICE_DATA = [{"date": "2026-07-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-24", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-24", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-25", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-25", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-25", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-26", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-26", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-26", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-27", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-27", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-27", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-27", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 10240}, {"date": "2026-07-28", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 10240}, {"date": "2026-07-28", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-07-28", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 10680}, {"date": "2026-07-28", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-29", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6912}, {"date": "2026-07-29", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-07-29", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 19800}, {"date": "2026-07-29", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-30", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 19800}, {"date": "2026-07-30", "product_name": "1등급 한우 냉장 등심 구이용 (국내산) 1kg", "price": 7680}, {"date": "2026-07-30", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5192}, {"date": "2026-07-30", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6400}, {"date": "2026-07-31", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5192}, {"date": "2026-07-31", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6400}, {"date": "2026-07-31", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 19800}, {"date": "2026-08-01", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6144}, {"date": "2026-08-01", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-01", "product_name": "한우 등심 1++등급 구이용 (국내산) 100g", "price": 12460}, {"date": "2026-08-02", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-03", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-04", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-04", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6144}, {"date": "2026-08-05", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-08-05", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 10240}, {"date": "2026-08-05", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 12640}, {"date": "2026-08-11", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 1280}, {"date": "2026-08-11", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 1264}, {"date": "2026-08-11", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 1280}, {"date": "2026-08-11", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 1264}, {"date": "2026-08-12", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-12", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-12", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-12", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-13", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-13", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-13", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-13", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-14", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-14", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-14", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-14", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-15", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-15", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-15", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-16", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-16", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-16", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-17", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-17", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-17", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-18", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-18", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5760}, {"date": "2026-08-18", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-19", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-19", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-20", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-20", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-21", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-21", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-22", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-22", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-23", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-23", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-24", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-25", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 6400}, {"date": "2026-08-25", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-25", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 7900}, {"date": "2026-08-26", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-26", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-26", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-26", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-27", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-27", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-28", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-28", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-29", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-29", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-30", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-30", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-31", "product_name": "한우 등심 1등급 구이용 (국내산) 100g", "price": 5888}, {"date": "2026-08-31", "product_name": "한우 등심 1+등급 구이용 (국내산) 100g", "price": 6952}, {"date": "2026-08-31", "product_name": "꽃 삼겹살 (600g)", "price": 3300}, {"date": "2026-08-31", "product_name": "돼지 삼겹살 (100g)", "price": 1698}, {"date": "2026-08-31", "product_name": "흑돼지 삼겹살 (100g)", "price": 5580}, {"date": "2026-08-31", "product_name": "포크밸리 삼겹살 (100g)", "price": 4980}, {"date": "2026-08-31", "product_name": "제주 삼겹살 (100g)", "price": 5580}, {"date": "2026-08-31", "product_name": "돼지 삼겹살 (1kg팩)", "price": 2480}];
 
         // Group data by product
         const products = [...new Set(PRICE_DATA.map(item => item.product_name))];
         let activeProducts = [...products];
         let activePeriod = 0; // 0 means all-time
-        let chart = null;
+        let beefChart = null;
+        let porkChart = null;
 
         // Color palettes for line charts
         const colors = [
@@ -209,7 +218,9 @@
             '#ff007f', // Pink
             '#ffb300', // Yellow
             '#00e676', // Green
-            '#d500f9'  // Purple
+            '#d500f9', // Purple
+            '#ff9800', // Orange
+            '#2196f3'  // Blue
         ];
 
         // Format dates correctly
@@ -224,10 +235,11 @@
             const label = document.createElement("label");
             label.className = "checkbox-item active";
             label.id = `label-${index}`;
+            let display_name = prod.replace(" (국내산) 100g", "").replace("등급 구이용", "").replace(" (국내산)", "");
             label.innerHTML = `
                 <input type="checkbox" checked onchange="toggleProduct('${prod}', ${index})">
                 <span class="indicator"></span>
-                <span>${prod.replace(" (국내산) 100g", "").replace("등급 구이용", "")}</span>
+                <span>${display_name}</span>
             `;
             filterContainer.appendChild(label);
         });
@@ -241,7 +253,7 @@
                 activeProducts.push(prod);
                 label.classList.add("active");
             }
-            updateChart();
+            updateCharts();
         };
 
         const setPeriod = (days) => {
@@ -250,12 +262,10 @@
             document.getElementById("btn-30").classList.remove("active");
             document.getElementById("btn-0").classList.remove("active");
             document.getElementById(`btn-${days}`).classList.add("active");
-            updateChart();
+            updateCharts();
         };
 
-        const updateChart = () => {
-            const ctx = document.getElementById('priceChart').getContext('2d');
-            
+        const updateCharts = () => {
             // Get all unique dates
             let dates = [...new Set(PRICE_DATA.map(item => item.date))].sort();
             
@@ -267,88 +277,105 @@
                 dates = dates.filter(d => d >= limitStr);
             }
 
-            // Create datasets
-            const datasets = activeProducts.map((prod, index) => {
-                const prodData = PRICE_DATA.filter(item => item.product_name === prod);
-                const dataPoints = dates.map(date => {
-                    const found = prodData.find(item => item.date === date);
-                    return found ? found.price : null;
+            const buildChartConfig = (filterFunc, threshold, thresholdLabel) => {
+                const groupProducts = activeProducts.filter(filterFunc);
+                
+                const datasets = groupProducts.map((prod, index) => {
+                    const prodData = PRICE_DATA.filter(item => item.product_name === prod);
+                    const dataPoints = dates.map(date => {
+                        const found = prodData.find(item => item.date === date);
+                        return found ? found.price : null;
+                    });
+
+                    return {
+                        label: prod.replace(" (국내산) 100g", "").replace("등급 구이용", "").replace(" (국내산)", ""),
+                        data: dataPoints,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        tension: 0.15,
+                        spanGaps: true
+                    };
+                });
+
+                // Add threshold line
+                datasets.push({
+                    label: thresholdLabel,
+                    data: Array(dates.length).fill(threshold),
+                    borderColor: '#ff4444',
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    fill: false
                 });
 
                 return {
-                    label: prod.replace(" (국내산) 100g", "").replace("등급 구이용", ""),
-                    data: dataPoints,
-                    borderColor: colors[index % colors.length],
-                    backgroundColor: colors[index % colors.length] + '20',
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    tension: 0.15,
-                    spanGaps: true
-                };
-            });
-
-            // Add threshold line
-            datasets.push({
-                label: '알림 기준가 (7,000원)',
-                data: Array(dates.length).fill(7000),
-                borderColor: '#ff4444',
-                borderDash: [5, 5],
-                pointRadius: 0,
-                borderWidth: 1.5,
-                fill: false
-            });
-
-            if (chart) {
-                chart.destroy();
-            }
-
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dates.map(d => formatShortDate(d)),
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#888' }
-                        },
-                        y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#888' }
-                        }
+                    type: 'line',
+                    data: {
+                        labels: dates.map(d => formatShortDate(d)),
+                        datasets: datasets
                     },
-                    plugins: {
-                        legend: {
-                            labels: { color: '#fff', font: { family: 'Noto Sans KR' } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#888' }
+                            },
+                            y: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#888' }
+                            }
                         },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
+                        plugins: {
+                            legend: {
+                                labels: { color: '#fff', font: { family: 'Noto Sans KR' } }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y).replace('₩', '') + '원';
+                                        }
+                                        return label;
                                     }
-                                    if (context.parsed.y !== null) {
-                                        label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y).replace('₩', '') + '원';
-                                    }
-                                    return label;
                                 }
                             }
                         }
                     }
-                }
-            });
+                };
+            };
+
+            // 1. Update Beef Chart
+            if (beefChart) {
+                beefChart.destroy();
+            }
+            beefChart = new Chart(
+                document.getElementById('priceChartBeef').getContext('2d'),
+                buildChartConfig((prod) => !prod.includes("삼겹살"), 7000, '알림 기준가 (7,000원)')
+            );
+
+            // 2. Update Pork Chart
+            if (porkChart) {
+                porkChart.destroy();
+            }
+            porkChart = new Chart(
+                document.getElementById('priceChartPork').getContext('2d'),
+                buildChartConfig((prod) => prod.includes("삼겹살"), 2000, '알림 기준가 (2,000원)')
+            );
         };
 
         // Initial render
-        updateChart();
+        updateCharts();
     </script>
 </body>
 </html>
