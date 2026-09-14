@@ -9,6 +9,9 @@ import re
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Configure Logging
 logging.basicConfig(
@@ -133,19 +136,21 @@ def send_email(subject, body, attachment_path=None):
 
 def init_driver():
     options = Options()
-    options.add_argument('--headless')
+    options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1920,1080')
     options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     options.add_argument('--disable-blink-features=AutomationControlled')
+    options.page_load_strategy = 'eager'  # Do not wait for heavy image/tracker downloads
     
     # Exclude automation switch to avoid bot flags
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
     driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(35)  # Cap page loading time to 35s to prevent urllib3 ReadTimeoutError
     
     # Hide automation webdriver property
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
@@ -900,8 +905,33 @@ def normalize_pork_title(title_text):
 
 def scrape_search_page(driver, url, is_pork=False):
     logging.info(f"Navigating to Megamart Search: {url}")
-    driver.get(url)
-    time.sleep(5)
+    
+    # Load page with timeout resilience & retry
+    max_retries = 2
+    for attempt in range(1, max_retries + 1):
+        try:
+            driver.get(url)
+            break
+        except (TimeoutException, WebDriverException) as te:
+            logging.warning(f"Attempt {attempt}/{max_retries}: Page load timed out or connection glitch for {url}: {te}")
+            try:
+                driver.execute_script("window.stop();")
+            except Exception:
+                pass
+            if attempt == max_retries:
+                logging.warning("Proceeding with whatever DOM was loaded after final attempt.")
+            else:
+                time.sleep(3)
+                
+    # Wait up to 10 seconds for items to appear
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "item-wrapper"))
+        )
+    except TimeoutException:
+        logging.warning(f"Timed out waiting for .item-wrapper element on {url}")
+        
+    time.sleep(2)
     
     # Save a screenshot for debugging
     os.makedirs("screenshots", exist_ok=True)
